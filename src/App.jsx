@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
+  ScrollText, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -18,6 +19,7 @@ import Kpi from './pages/Kpi.jsx'
 import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import AiDashboard from './pages/AiDashboard.jsx'
+import Logs from './pages/Logs.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -126,8 +128,11 @@ function EnvPicker() {
   const [form, setForm] = useState({ name: '', logo: '' })
   const [pinFor, setPinFor] = useState(null)
 
-  // Owen (développeur) voit tous les environnements ; les autres, ceux qu'ils ont créés.
-  const envs = me.developer ? store.db.environments : store.db.environments.filter(e => e.createdBy === me.id)
+  // Owen (développeur) voit tous les environnements ; les autres, ceux qu'ils ont créés
+  // ou ceux auxquels un administrateur / manager les a ajoutés (membres).
+  const envs = me.developer
+    ? store.db.environments
+    : store.db.environments.filter(e => e.createdBy === me.id || (e.members || []).includes(me.id))
 
   const enter = (env) => {
     if (env.pin) setPinFor(env)
@@ -257,19 +262,41 @@ function SubEnvPicker() {
 }
 
 // ---------------------------------------------------------------- App principale
-const NAV = [
-  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
-  { id: 'rdv', label: 'Mes Rendez-vous', icon: CalendarDays, brick: 'Mes Rendez-vous' },
-  { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
-  { id: 'tasks', label: 'Tâches prioritaires', icon: ListChecks, brick: 'Tâches prioritaires' },
-  { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
-  { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
-  { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
-  { id: 'ai', label: 'Dashboard personnalisé', icon: Sparkles, brick: 'Dashboard personnalisé' },
-  { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur'] },
-  { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Administrateur'] },
-  { id: 'teams', label: 'Gérez mes équipes', icon: Users, roles: ['Manager'] },
+const NAV_GROUPS = [
+  {
+    id: 'pilotage', label: 'Pilotage', items: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
+      { id: 'ai', label: 'Dashboard personnalisé', icon: Sparkles, brick: 'Dashboard personnalisé' },
+      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur'] },
+    ],
+  },
+  {
+    id: 'activite', label: 'Activité commerciale', items: [
+      { id: 'rdv', label: 'Mes Rendez-vous', icon: CalendarDays, brick: 'Mes Rendez-vous' },
+      { id: 'leads', label: 'Leads', icon: KanbanSquare, brick: 'Leads' },
+      { id: 'tasks', label: 'Tâches prioritaires', icon: ListChecks, brick: 'Tâches prioritaires' },
+    ],
+  },
+  {
+    id: 'donnees', label: 'Données', items: [
+      { id: 'contacts', label: 'Mes contacts', icon: BookUser, brick: 'Mes contacts' },
+      { id: 'notes', label: 'Mes notes', icon: StickyNote, brick: 'Mes notes' },
+      { id: 'logs', label: 'Logs', icon: ScrollText, brick: 'Logs' },
+    ],
+  },
+  {
+    id: 'remuneration', label: 'Rémunération', items: [
+      { id: 'primes', label: 'Primes & Commissions', icon: Coins, brick: 'Primes & Commissions' },
+    ],
+  },
+  {
+    id: 'administration', label: 'Administration', items: [
+      { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Administrateur'] },
+      { id: 'teams', label: 'Gérez mes équipes', icon: Users, roles: ['Manager'] },
+    ],
+  },
 ]
+const NAV = NAV_GROUPS.flatMap(g => g.items)
 
 function MainApp() {
   const store = useStore()
@@ -285,11 +312,13 @@ function MainApp() {
 
   const themeObj = THEMES.find(t => t.id === (store.sub?.theme || theme)) || THEMES[0]
 
-  const nav = NAV.filter(item => {
+  const canSee = (item) => {
     if (item.roles && !item.roles.includes(me.role)) return false
     if (item.brick && !(me.bricks || []).includes(item.brick)) return false
     return true
-  })
+  }
+  const groups = NAV_GROUPS.map(g => ({ ...g, items: g.items.filter(canSee) })).filter(g => g.items.length)
+  const [closedGroups, setClosedGroups] = useState({})
 
   const goCreateRdvFromNote = (content) => { setPendingNote(content); setPage('rdv') }
 
@@ -302,6 +331,7 @@ function MainApp() {
     notes: <Notes onCreateRdvFromNote={goCreateRdvFromNote} />,
     primes: <Primes />,
     ai: <AiDashboard />,
+    logs: <Logs />,
     kpi: <Kpi />,
     admin: <Admin mode="admin" />,
     teams: <Admin mode="teams" />,
@@ -319,34 +349,52 @@ function MainApp() {
         }} />
       ))}
       {/* Sidebar */}
-      <aside className="w-60 shrink-0 bg-card/90 backdrop-blur border-r border-line flex flex-col z-10">
-        <div className="p-4 border-b border-line">
+      <aside className="w-56 shrink-0 bg-card/90 backdrop-blur border-r border-line flex flex-col z-10">
+        <div className="px-3.5 py-3 border-b border-line">
           <div className="flex items-center gap-2.5">
             {env?.logo
-              ? <img src={env.logo} alt="" className="w-9 h-9 rounded-xl object-cover" />
-              : <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-brand to-brand2 text-white font-extrabold flex items-center justify-center">B</div>}
+              ? <img src={env.logo} alt="" className="w-8 h-8 rounded-lg object-cover" />
+              : <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand to-brand2 text-white text-sm font-extrabold flex items-center justify-center">B</div>}
             <div className="min-w-0">
-              <div className="font-extrabold text-sm leading-tight truncate">Espace Sales de {me.pseudo}</div>
-              <div className="text-xs text-muted truncate">{env?.name} · {sub?.prenom} {sub?.nom}</div>
+              <div className="font-extrabold text-[13px] leading-tight truncate">Espace Sales de {me.pseudo}</div>
+              <div className="text-[11px] text-muted truncate">{env?.name} · {sub?.prenom} {sub?.nom}</div>
             </div>
           </div>
         </div>
-        <nav className="flex-1 p-2.5 space-y-1 overflow-y-auto">
-          {nav.map(item => (
-            <button key={item.id} onClick={() => setPage(item.id)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
-              <item.icon size={17} /> {item.label}
-            </button>
-          ))}
+        <nav className="flex-1 px-2 py-2 overflow-y-auto">
+          {groups.map(g => {
+            const open = !closedGroups[g.id]
+            const hasActive = g.items.some(i => i.id === page)
+            return (
+              <div key={g.id} className="mb-1">
+                <button onClick={() => setClosedGroups(c => ({ ...c, [g.id]: !c[g.id] }))}
+                  className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider ${hasActive ? 'text-brand' : 'text-muted'} hover:bg-surface`}>
+                  {g.label}
+                  {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                </button>
+                {(open || hasActive) && (
+                  <div className="space-y-0.5 mt-0.5">
+                    {g.items.map(item => (
+                      <button key={item.id} onClick={() => setPage(item.id)}
+                        className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
+                        <item.icon size={15} className={page === item.id ? '' : 'text-muted'} />
+                        <span className="truncate">{item.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </nav>
-        <div className="p-3 border-t border-line space-y-1">
-          <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold text-muted hover:bg-surface"
+        <div className="px-2 py-2 border-t border-line space-y-0.5">
+          <button className="w-full flex items-center gap-2 px-3 py-[7px] rounded-lg text-[13px] font-semibold text-muted hover:bg-surface"
             onClick={() => store.setSession(s => ({ ...s, subEnvId: null }))}>
-            <ArrowLeft size={16} /> Changer d'espace
+            <ArrowLeft size={15} /> Changer d'espace
           </button>
-          <button className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold text-red-500 hover:bg-red-50"
+          <button className="w-full flex items-center gap-2 px-3 py-[7px] rounded-lg text-[13px] font-semibold text-red-500 hover:bg-red-50"
             onClick={store.logout}>
-            <LogOut size={16} /> Déconnexion
+            <LogOut size={15} /> Déconnexion
           </button>
         </div>
       </aside>

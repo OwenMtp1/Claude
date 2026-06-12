@@ -209,7 +209,7 @@ export default function Primes() {
       <div className="card p-4 overflow-x-auto">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold">Barème de commissions</h3>
-          <button className="btn-primary !py-1.5 text-xs" onClick={() => setBareme([...sub.bareme, { id: uid(), min: 0, max: 0, montant: 0, leadSource: '' }])}>
+          <button className="btn-primary !py-1.5 text-xs" onClick={() => { setBareme([...sub.bareme, { id: uid(), min: 0, max: 0, montant: 0, leadSource: '' }]); store.logAction('Prime', 'Catégorie de commission ajoutée') }}>
             <Plus size={14} /> Ajouter une catégorie
           </button>
         </div>

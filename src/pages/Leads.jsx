@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Clock, Building2 } from 'lucide-react'
+import { Clock, Building2, Users, UserRound, MessageSquare } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS } from '../store.jsx'
 import { Modal, Empty } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
@@ -76,17 +76,25 @@ export default function Leads() {
   const sub = store.sub
   const [detail, setDetail] = useState(null)
   const [dragKey, setDragKey] = useState(null)
+  const [scope, setScope] = useState('me') // 'me' = mon pipeline | 'org' = pipeline entreprise (partagé)
 
   const cols = sub.opportunites // le kanban se met à jour avec chaque nouveau statut créé
-  const groups = groupByCompany(sub.rdvs)
+
+  // Vue entreprise : agrège les RDV de tous les espaces de l'environnement, avec leur propriétaire.
+  const envSubs = store.db.subenvs.filter(s => s.envId === store.session.envId)
+  const orgRdvs = envSubs.flatMap(s => (store.db.data[s.id]?.rdvs || []).map(r => ({ ...r, _owner: `${s.prenom} ${s.nom}` })))
+  const groups = groupByCompany(scope === 'me' ? sub.rdvs : orgRdvs)
 
   const drop = (opp) => {
-    if (!dragKey) return
+    if (!dragKey || scope === 'org') return
     store.setSub(d => {
       const group = groupByCompany(d.rdvs).find(g => g.entreprise === dragKey)
       if (group) {
         const r = d.rdvs.find(x => x.id === group.rep.id)
-        if (r && r.opportunite !== opp) Object.assign(r, applyRdvAutomations(r, { opportunite: opp }))
+        if (r && r.opportunite !== opp) {
+          Object.assign(r, applyRdvAutomations(r, { opportunite: opp }))
+          store.logAction('Lead', 'Statut déplacé (kanban)', `${dragKey} → ${opp}`)
+        }
       }
       return d
     })
@@ -95,8 +103,20 @@ export default function Leads() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold">Leads — Pipeline par entreprise</h2>
-      <p className="text-xs text-muted -mt-2">Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut d'opportunité ; la phase de transaction se met à jour automatiquement.</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-extrabold">Leads — Pipeline</h2>
+        <div className="flex rounded-lg border border-line overflow-hidden">
+          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${scope === 'me' ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
+            onClick={() => setScope('me')}><UserRound size={13} /> Mon pipeline</button>
+          <button className={`px-3 py-1.5 text-xs font-semibold flex items-center gap-1.5 ${scope === 'org' ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
+            onClick={() => setScope('org')}><Users size={13} /> Pipeline entreprise</button>
+        </div>
+      </div>
+      <p className="text-xs text-muted -mt-2">
+        {scope === 'me'
+          ? "Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut d'opportunité."
+          : 'Vue partagée de toute l\'organisation (lecture). Ouvrez une fiche entreprise pour laisser un commentaire visible par tous les membres.'}
+      </p>
       <div className="flex gap-3 overflow-x-auto pb-3">
         {cols.map(opp => {
           const cards = groups.filter(g => g.opportunite === opp)
@@ -109,20 +129,25 @@ export default function Leads() {
               </div>
               <div className="space-y-2 min-h-[6rem]">
                 {cards.length === 0 && <div className="text-xs text-muted text-center py-4">—</div>}
-                {cards.map(g => (
-                  <div key={g.entreprise} draggable onDragStart={() => setDragKey(g.entreprise)} onDragEnd={() => setDragKey(null)}
-                    className={`card !rounded-xl p-3 cursor-grab active:cursor-grabbing ${dragKey === g.entreprise ? 'dragging' : ''}`}>
-                    <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
-                      onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
-                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                      <span className={`chip ${PHASE_COLORS[g.rep.phase] || 'bg-surface text-ink'}`}>{g.rep.phase}</span>
-                      {g.rdvs.length > 1 && <span className="chip bg-surface text-muted">{g.rdvs.length} RDV</span>}
+                {cards.map(g => {
+                  const nbComments = (store.db.environments.find(e => e.id === store.session.envId)?.comments?.[g.entreprise] || []).length
+                  return (
+                    <div key={g.entreprise} draggable={scope === 'me'} onDragStart={() => setDragKey(g.entreprise)} onDragEnd={() => setDragKey(null)}
+                      className={`card !rounded-xl p-3 ${scope === 'me' ? 'cursor-grab active:cursor-grabbing' : ''} ${dragKey === g.entreprise ? 'dragging' : ''}`}>
+                      <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
+                        onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        <span className={`chip ${PHASE_COLORS[g.rep.phase] || 'bg-surface text-ink'}`}>{g.rep.phase}</span>
+                        {g.rdvs.length > 1 && <span className="chip bg-surface text-muted">{g.rdvs.length} RDV</span>}
+                        {scope === 'org' && g.rep._owner && <span className="chip bg-brand/10 text-brand">{g.rep._owner}</span>}
+                        {nbComments > 0 && <span className="chip bg-amber-100 text-amber-700 flex items-center gap-0.5"><MessageSquare size={10} /> {nbComments}</span>}
+                      </div>
+                      <button className="flex items-center gap-1 text-xs text-brand font-semibold mt-2 hover:underline" onClick={() => setDetail(g)}>
+                        <Clock size={12} /> Actif depuis {companyLifeDays(g)} j
+                      </button>
                     </div>
-                    <button className="flex items-center gap-1 text-xs text-brand font-semibold mt-2 hover:underline" onClick={() => setDetail(g)}>
-                      <Clock size={12} /> Actif depuis {companyLifeDays(g)} j
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )

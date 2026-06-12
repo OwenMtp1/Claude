@@ -71,6 +71,7 @@ export default function Contacts() {
     a.download = 'contacts.csv'
     a.click()
     URL.revokeObjectURL(a.href)
+    store.logAction('Contact', 'Export CSV', `${list.length} contact(s)${onlySelected ? ' (sélection)' : hasFilters ? ' (filtre)' : ''}`)
   }
 
   const importCSV = (file) => {
@@ -78,6 +79,7 @@ export default function Contacts() {
     reader.onload = () => {
       const added = parseCSV(String(reader.result))
       store.setSub(d => ({ ...d, contacts: [...d.contacts, ...added] }))
+      store.logAction('Contact', 'Import CSV', `${added.length} contact(s) depuis ${file.name}`)
     }
     reader.readAsText(file)
   }
@@ -142,7 +144,7 @@ export default function Contacts() {
 
       {confirmDel && (
         <Confirm message={`Supprimer ${selected.size} contact(s) ?`}
-          onYes={() => { store.setSub(d => ({ ...d, contacts: d.contacts.filter(c => !selected.has(c.id)) })); setSelected(new Set()); setConfirmDel(false) }}
+          onYes={() => { store.logAction('Contact', 'Contacts supprimés', `${selected.size} contact(s)`); store.setSub(d => ({ ...d, contacts: d.contacts.filter(c => !selected.has(c.id)) })); setSelected(new Set()); setConfirmDel(false) }}
           onNo={() => setConfirmDel(false)} />
       )}
     </div>

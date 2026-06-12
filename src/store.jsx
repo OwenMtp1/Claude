@@ -107,7 +107,7 @@ export const RDV_FIELDS = [
 
 export const BRICKS = [
   'Dashboard', 'Mes Rendez-vous', 'Leads', 'Tâches prioritaires', 'Mes contacts', 'Mes notes',
-  'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé',
+  'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé', 'Logs',
 ]
 
 export const ROLES = ['Fondateur', 'Administrateur', 'Manager', 'Membre']
@@ -138,6 +138,7 @@ function emptySubEnvData() {
     widgets: null, // null = layout par défaut
     customDashboards: [],
     companies: {}, // infos société enrichies manuellement (CA, site, LinkedIn, localisation)
+    logs: [], // journal d'audit : { id, ts, type, action, details }
   }
 }
 
@@ -265,9 +266,9 @@ function migrate(db) {
   // Ajoute les nouvelles briques aux comptes qui avaient déjà l'accès cœur (proxy : brique "Leads").
   ;(db.accounts || []).forEach(a => {
     a.bricks = a.bricks || []
-    if (a.bricks.includes('Leads') && !a.bricks.includes('Tâches prioritaires')) {
-      a.bricks.splice(a.bricks.indexOf('Leads') + 1, 0, 'Tâches prioritaires')
-    }
+    ;['Tâches prioritaires', 'Logs'].forEach(b => {
+      if (a.bricks.includes('Leads') && !a.bricks.includes(b)) a.bricks.push(b)
+    })
   })
   return db
 }
@@ -313,7 +314,18 @@ export function StoreProvider({ children }) {
       },
       logout() { setSession(null) },
       enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
-      enterSubEnv(subEnvId) { setSession(s => ({ ...s, subEnvId })) },
+      enterSubEnv(subEnvId) {
+        setSession(s => ({ ...s, subEnvId }))
+        setDb(d => {
+          const data = d.data[subEnvId]
+          if (data) {
+            data.logs = data.logs || []
+            data.logs.unshift({ id: uid(), ts: new Date().toISOString(), type: 'Connexion', action: 'Entrée dans l\'espace', details: '' })
+            if (data.logs.length > 1000) data.logs.length = 1000
+          }
+          return d
+        })
+      },
       createEnv({ name, logo }) {
         const env = { id: uid(), name, logo: logo || '', pin: '', createdBy: session.accountId, departments: ['Marketing', 'Sales'] }
         setDb(d => { d.environments.push(env); return d })
@@ -341,6 +353,45 @@ export function StoreProvider({ children }) {
         const subId = session?.subEnvId
         if (!subId) return
         setDb(d => { d.data[subId] = fn(d.data[subId]); return d })
+      },
+      // ----- journal d'audit (traçabilité)
+      logAction(type, action, details = '') {
+        const subId = session?.subEnvId
+        if (!subId) return
+        setDb(d => {
+          const data = d.data[subId]
+          if (!data) return d
+          data.logs = data.logs || []
+          data.logs.unshift({ id: uid(), ts: new Date().toISOString(), type, action, details })
+          if (data.logs.length > 1000) data.logs.length = 1000
+          return d
+        })
+      },
+      // ----- commentaires d'entreprise partagés au niveau de l'environnement
+      addCompanyComment(company, text) {
+        const env = db.environments.find(e => e.id === session?.envId)
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        if (!env || !text.trim()) return
+        setDb(d => {
+          const e = d.environments.find(x => x.id === env.id)
+          e.comments = e.comments || {}
+          const key = company.trim()
+          e.comments[key] = e.comments[key] || []
+          e.comments[key].push({
+            id: uid(), ts: new Date().toISOString(), text: text.trim(),
+            author: sub ? `${sub.prenom} ${sub.nom}` : 'Inconnu', authorSubId: sub?.id,
+          })
+          return d
+        })
+      },
+      deleteCompanyComment(company, commentId) {
+        setDb(d => {
+          const e = d.environments.find(x => x.id === session?.envId)
+          if (e?.comments?.[company.trim()]) {
+            e.comments[company.trim()] = e.comments[company.trim()].filter(c => c.id !== commentId)
+          }
+          return d
+        })
       },
       // ----- comptes (administration)
       updateAccount(id, patch) { setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
