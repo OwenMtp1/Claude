@@ -137,6 +137,7 @@ function emptySubEnvData() {
     fieldsConfig: RDV_FIELDS.map(f => ({ key: f.key, visible: true })),
     widgets: null, // null = layout par défaut
     customDashboards: [],
+    companies: {}, // infos société enrichies manuellement (CA, site, LinkedIn, localisation)
   }
 }
 

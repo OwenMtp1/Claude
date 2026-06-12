@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Clock, Building2 } from 'lucide-react'
 import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS } from '../store.jsx'
 import { Modal, Empty } from '../ui.jsx'
+import { openCompany } from './Company.jsx'
 
 const recentDate = (r) => r.dateRdv || r.datePriseRdv || r.createdAt || ''
 
@@ -111,7 +112,8 @@ export default function Leads() {
                 {cards.map(g => (
                   <div key={g.entreprise} draggable onDragStart={() => setDragKey(g.entreprise)} onDragEnd={() => setDragKey(null)}
                     className={`card !rounded-xl p-3 cursor-grab active:cursor-grabbing ${dragKey === g.entreprise ? 'dragging' : ''}`}>
-                    <div className="font-bold text-sm flex items-center gap-1.5"><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</div>
+                    <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
+                      onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
                     <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                       <span className={`chip ${PHASE_COLORS[g.rep.phase] || 'bg-surface text-ink'}`}>{g.rep.phase}</span>
                       {g.rdvs.length > 1 && <span className="chip bg-surface text-muted">{g.rdvs.length} RDV</span>}

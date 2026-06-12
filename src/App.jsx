@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
-  Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks,
+  Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
 } from 'lucide-react'
 import { useStore } from './store.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -18,6 +18,8 @@ import Kpi from './pages/Kpi.jsx'
 import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import AiDashboard from './pages/AiDashboard.jsx'
+import CompanyModal from './pages/Company.jsx'
+import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
 
 // ---------------------------------------------------------------- Connexion
@@ -354,6 +356,10 @@ function MainApp() {
         <header className="h-14 px-5 flex items-center justify-between bg-card/80 backdrop-blur border-b border-line sticky top-0 z-20">
           <span className="font-bold text-sm text-muted">{NAV.find(n => n.id === page)?.label || (page === 'settings' ? 'Paramètres' : page === 'org' ? 'Organigramme' : '')}</span>
           <div className="flex items-center gap-1.5">
+            <button title="Recherche (Ctrl+K)" className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-line text-muted text-xs hover:bg-surface"
+              onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}>
+              <Search size={14} /> Rechercher <kbd className="text-[10px] border border-line rounded px-1">⌘K</kbd>
+            </button>
             <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
               <Network size={19} />
             </button>
@@ -367,6 +373,8 @@ function MainApp() {
         </header>
         <main className="p-5 max-w-[1400px] mx-auto">{pageEl}</main>
       </div>
+      <CompanyModal />
+      <GlobalSearch onNavigate={setPage} />
       <Chatbot />
     </div>
   )
