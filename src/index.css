@@ -1,0 +1,69 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --brand: 59 91 219;
+  --brand2: 14 165 233;
+  --surface: 244 246 250;
+  --card: 255 255 255;
+  --ink: 23 32 51;
+  --muted: 100 112 133;
+  --line: 226 230 238;
+  --anim-bg: none;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-surface text-ink font-sans antialiased;
+  background-image: var(--anim-bg);
+  background-attachment: fixed;
+  background-size: 400% 400%;
+}
+
+body.animated-bg { animation: bgshift 18s ease infinite; }
+@keyframes bgshift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.card { @apply bg-card rounded-2xl border border-line shadow-sm; }
+.btn { @apply inline-flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold transition-colors cursor-pointer select-none; }
+.btn-primary { @apply btn bg-brand text-white hover:opacity-90; }
+.btn-ghost { @apply btn bg-transparent text-ink border border-line hover:bg-surface; }
+.btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700; }
+.input { @apply w-full px-3 py-2 rounded-lg border border-line bg-card text-sm text-ink outline-none focus:ring-2 focus:ring-brand/40; }
+.label { @apply block text-xs font-semibold text-muted uppercase tracking-wide mb-1; }
+.chip { @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold; }
+
+.fade-in { animation: fadein .4s ease both; }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Welcome reveal animation */
+.reveal-text {
+  display: inline-block;
+  overflow: hidden;
+  white-space: nowrap;
+  border-right: 3px solid rgb(var(--brand));
+  animation: typing 2s steps(40, end) both, blink .8s step-end infinite;
+}
+@keyframes typing { from { width: 0 } to { width: 100% } }
+@keyframes blink { 50% { border-color: transparent } }
+
+/* Floating bubbles for animated themes */
+.bubble-float {
+  position: fixed; border-radius: 9999px; pointer-events: none; z-index: 0;
+  filter: blur(40px); opacity: .35;
+  animation: floaty 14s ease-in-out infinite alternate;
+}
+@keyframes floaty {
+  from { transform: translateY(0) translateX(0) scale(1); }
+  to { transform: translateY(-60px) translateX(40px) scale(1.15); }
+}
+
+.kanban-col { min-width: 16rem; }
+.dragging { opacity: .5; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: rgb(var(--line)); border-radius: 8px; }
