@@ -1,0 +1,389 @@
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react'
+
+const LS_KEY = 'bdrflow_db_v1'
+const SESSION_KEY = 'bdrflow_session_v1'
+
+// ---------------------------------------------------------------- Helpers dates
+export const todayISO = () => new Date().toISOString().slice(0, 10)
+export const parseISO = (s) => (s ? new Date(s + 'T00:00:00') : null)
+export const fmtDate = (s) => (s ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR') : '—')
+export const uid = () => Math.random().toString(36).slice(2, 10)
+
+export function startOfWeek(d) {
+  const x = new Date(d)
+  const day = (x.getDay() + 6) % 7
+  x.setDate(x.getDate() - day)
+  x.setHours(0, 0, 0, 0)
+  return x
+}
+
+// Timeline: 'today' | 'yesterday' | 'week' | 'month' | 'year' | 'total' | 'custom'
+export function inTimeline(dateStr, timeline, custom = {}) {
+  if (timeline === 'total') return true
+  if (!dateStr) return false
+  const d = parseISO(dateStr)
+  if (!d) return false
+  const now = new Date()
+  now.setHours(0, 0, 0, 0)
+  if (timeline === 'today') return d.getTime() === now.getTime()
+  if (timeline === 'yesterday') {
+    const y = new Date(now); y.setDate(y.getDate() - 1)
+    return d.getTime() === y.getTime()
+  }
+  if (timeline === 'week') {
+    const s = startOfWeek(now)
+    const e = new Date(s); e.setDate(e.getDate() + 7)
+    return d >= s && d < e
+  }
+  if (timeline === 'month') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+  if (timeline === 'year') return d.getFullYear() === now.getFullYear()
+  if (timeline === 'custom') {
+    const s = custom.start ? parseISO(custom.start) : null
+    const e = custom.end ? parseISO(custom.end) : null
+    if (s && d < s) return false
+    if (e && d > e) return false
+    return !!(s || e)
+  }
+  return true
+}
+
+export const TIMELINES = [
+  { id: 'today', label: "Aujourd'hui" },
+  { id: 'yesterday', label: 'Hier' },
+  { id: 'week', label: 'Cette semaine' },
+  { id: 'month', label: 'Ce mois-ci' },
+  { id: 'year', label: 'Cette année' },
+  { id: 'total', label: 'Total' },
+  { id: 'custom', label: 'Date personnalisée' },
+]
+
+// Mois de paiement d'une prime : déclenchée par la date de passage en SQL.
+// Payée au 15 max du mois en cours ; après le 15, elle passe au mois suivant.
+export function primePaymentMonth(dateStr) {
+  const d = parseISO(dateStr)
+  if (!d) return null
+  const m = new Date(d.getFullYear(), d.getMonth(), 1)
+  if (d.getDate() > 15) m.setMonth(m.getMonth() + 1)
+  return m // Date au 1er du mois de paiement
+}
+
+export const monthKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+export const monthLabel = (d) => d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+
+// ---------------------------------------------------------------- Constantes métier
+export const SOURCES = ['Inbound', 'Outbound', 'Event', 'Partner']
+export const DEFAULT_PHASES = ['R1', 'R2', 'MQL', 'SQL', 'KO', 'Signée']
+export const DEFAULT_OPPS = ['En cours', 'Perdue', 'Gagnée', 'Signée', 'No Show R1', 'No Show MQL']
+export const DEFAULT_PROVENANCES = ['Cold Call', 'LinkedIn', 'Site Web', 'Salon', 'Référence client', 'Emailing']
+
+export const PHASE_COLORS = {
+  R1: 'bg-sky-100 text-sky-700', R2: 'bg-indigo-100 text-indigo-700',
+  MQL: 'bg-blue-100 text-blue-700', SQL: 'bg-red-100 text-red-700',
+  KO: 'bg-gray-200 text-gray-600', 'Signée': 'bg-emerald-100 text-emerald-700',
+}
+export const OPP_COLORS = {
+  'En cours': 'bg-amber-100 text-amber-700', Perdue: 'bg-gray-200 text-gray-600',
+  'Gagnée': 'bg-emerald-100 text-emerald-700', 'Signée': 'bg-emerald-200 text-emerald-800',
+  'No Show R1': 'bg-orange-100 text-orange-700', 'No Show MQL': 'bg-orange-100 text-orange-700',
+}
+
+export const RDV_FIELDS = [
+  { key: 'source', label: 'Source' },
+  { key: 'phase', label: 'Phase de transaction' },
+  { key: 'opportunite', label: 'Opportunité' },
+  { key: 'entreprise', label: "Nom de l'entreprise" },
+  { key: 'effectif', label: 'Nombre de collaborateurs' },
+  { key: 'secteur', label: "Secteur d'activité" },
+  { key: 'contact', label: 'Nom & Prénom du contact' },
+  { key: 'poste', label: 'Poste du contact' },
+  { key: 'email', label: 'Mail du contact' },
+  { key: 'tel', label: 'Téléphone du contact' },
+  { key: 'linkedin', label: 'Profil LinkedIn' },
+  { key: 'datePriseRdv', label: 'Date de prise de RDV' },
+  { key: 'dateRdv', label: 'Date du RDV' },
+  { key: 'provenance', label: 'Provenance du lead' },
+  { key: 'notes', label: 'Notes' },
+]
+
+export const BRICKS = [
+  'Dashboard', 'Mes Rendez-vous', 'Leads', 'Mes contacts', 'Mes notes',
+  'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé',
+]
+
+export const ROLES = ['Fondateur', 'Administrateur', 'Manager', 'Membre']
+
+// ---------------------------------------------------------------- Seed
+function emptySubEnvData() {
+  return {
+    rdvs: [],
+    contacts: [],
+    notes: [],
+    noteFolders: ['Général'],
+    noteTemplates: [
+      { id: uid(), name: 'Compte-rendu R1', content: "## Compte-rendu R1\n\nEntreprise :\nContact :\nBesoins identifiés :\nBudget :\nProchaine étape :" },
+      { id: uid(), name: 'Qualification BANT', content: "## Qualification BANT\n\nBudget :\nAuthority (décideur) :\nNeed (besoin) :\nTiming :" },
+    ],
+    bareme: [
+      { id: uid(), min: 1, max: 50, montant: 100, leadSource: 'Outbound' },
+      { id: uid(), min: 51, max: 200, montant: 200, leadSource: 'Outbound' },
+      { id: uid(), min: 201, max: 500, montant: 350, leadSource: 'Outbound' },
+      { id: uid(), min: 501, max: 99999, montant: 500, leadSource: 'Outbound' },
+      { id: uid(), min: 1, max: 200, montant: 150, leadSource: 'Inbound' },
+      { id: uid(), min: 201, max: 99999, montant: 300, leadSource: 'Inbound' },
+    ],
+    provenances: [...DEFAULT_PROVENANCES],
+    phases: [...DEFAULT_PHASES],
+    opportunites: [...DEFAULT_OPPS],
+    fieldsConfig: RDV_FIELDS.map(f => ({ key: f.key, visible: true })),
+    widgets: null, // null = layout par défaut
+    customDashboards: [],
+  }
+}
+
+function seedRdvs() {
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = String(now.getMonth() + 1).padStart(2, '0')
+  const prevM = new Date(y, now.getMonth() - 1, 10)
+  const pm = `${prevM.getFullYear()}-${String(prevM.getMonth() + 1).padStart(2, '0')}`
+  const mk = (d, mm = m, yy = y) => `${yy}-${mm}-${String(d).padStart(2, '0')}`
+  const base = (o) => ({
+    id: uid(), parentId: null, source: 'Outbound', phase: 'R1', opportunite: 'En cours',
+    entreprise: '', effectif: '', secteur: '', linkedin: '', provenance: 'Cold Call',
+    contacts: [], dateRdv: '', datePriseRdv: '', datePassageSQL: '', notes: '',
+    history: [], createdAt: todayISO(), ...o,
+  })
+  const r1 = base({
+    entreprise: 'NovaTech Solutions', effectif: 320, secteur: 'SaaS RH', source: 'Outbound',
+    phase: 'SQL', opportunite: 'Gagnée', provenance: 'Cold Call',
+    contacts: [{ id: uid(), nom: 'Claire Dubois', poste: 'DRH', email: 'c.dubois@novatech.fr', tel: '06 12 34 56 78' }],
+    datePriseRdv: mk(2), dateRdv: mk(9), datePassageSQL: mk(11),
+    notes: 'Très intéressés par le module onboarding.',
+    history: [
+      { type: 'phase', value: 'R1', date: mk(2) },
+      { type: 'phase', value: 'MQL', date: mk(9) },
+      { type: 'phase', value: 'SQL', date: mk(11) },
+    ],
+  })
+  const r2 = base({
+    entreprise: 'Alpine Industries', effectif: 85, secteur: 'Industrie', source: 'Inbound',
+    phase: 'MQL', opportunite: 'En cours', provenance: 'Site Web',
+    contacts: [{ id: uid(), nom: 'Marc Lefèvre', poste: 'Directeur des Opérations', email: 'm.lefevre@alpine-ind.com', tel: '07 98 76 54 32' }],
+    datePriseRdv: mk(4), dateRdv: mk(10),
+    history: [{ type: 'phase', value: 'R1', date: mk(4) }, { type: 'phase', value: 'MQL', date: mk(10) }],
+  })
+  const r3 = base({
+    entreprise: 'Lumea Santé', effectif: 1200, secteur: 'Santé', source: 'Event',
+    phase: 'Signée', opportunite: 'Signée', provenance: 'Salon',
+    contacts: [{ id: uid(), nom: 'Sophie Marchand', poste: 'VP People', email: 's.marchand@lumea.fr', tel: '06 45 67 89 01' }],
+    datePriseRdv: `${pm}-08`, dateRdv: `${pm}-18`, datePassageSQL: `${pm}-20`,
+    notes: 'Signature après POC de 2 semaines.',
+    history: [
+      { type: 'phase', value: 'R1', date: `${pm}-08` },
+      { type: 'phase', value: 'SQL', date: `${pm}-20` },
+      { type: 'phase', value: 'Signée', date: mk(3) },
+    ],
+  })
+  const r4 = base({
+    entreprise: 'Brio Conseil', effectif: 25, secteur: 'Conseil', source: 'Partner',
+    phase: 'KO', opportunite: 'Perdue', provenance: 'Référence client',
+    contacts: [{ id: uid(), nom: 'Julien Petit', poste: 'CEO', email: 'j.petit@brio.fr', tel: '06 22 33 44 55' }],
+    datePriseRdv: `${pm}-15`, dateRdv: `${pm}-25`,
+    history: [{ type: 'phase', value: 'R1', date: `${pm}-15` }, { type: 'phase', value: 'KO', date: mk(1) }],
+  })
+  const r5 = base({
+    entreprise: 'NovaTech Solutions', parentId: r1.id, effectif: 320, secteur: 'SaaS RH', source: 'Outbound',
+    phase: 'R2', opportunite: 'En cours', provenance: 'Cold Call',
+    contacts: [{ id: uid(), nom: 'Claire Dubois', poste: 'DRH', email: 'c.dubois@novatech.fr', tel: '06 12 34 56 78' }],
+    datePriseRdv: mk(11), dateRdv: mk(18),
+    history: [{ type: 'phase', value: 'R2', date: mk(11) }],
+  })
+  return [r1, r2, r3, r4, r5]
+}
+
+function contactsFromRdvs(rdvs) {
+  const out = []
+  const seen = new Set()
+  rdvs.forEach(r => (r.contacts || []).forEach(c => {
+    const k = (c.email || c.nom || '').toLowerCase()
+    if (!k || seen.has(k)) return
+    seen.add(k)
+    out.push({
+      id: uid(), nom: c.nom, poste: c.poste, email: c.email, tel: c.tel,
+      entreprise: r.entreprise, secteur: r.secteur, linkedin: r.linkedin,
+      source: r.source, createdAt: r.datePriseRdv || r.createdAt,
+    })
+  }))
+  return out
+}
+
+function buildSeedDb() {
+  const envId = 'env-peoplespheres'
+  const subId = 'sub-owen'
+  const subData = emptySubEnvData()
+  subData.rdvs = seedRdvs()
+  subData.contacts = contactsFromRdvs(subData.rdvs)
+  return {
+    accounts: [{
+      id: '01', email: 'owen.mb.pro@gmail.com', pseudo: 'OwenMtp', password: 'demo1234',
+      role: 'Fondateur', developer: true, photo: '', bricks: [...BRICKS], teamOf: null,
+    }],
+    environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
+    subenvs: [{ id: subId, envId, prenom: 'Owen', nom: 'Mrani Bonnier', poste: 'BDR', service: 'Marketing', pin: '1205', photo: '', ownerId: '01' }],
+    data: { [subId]: subData },
+  }
+}
+
+// ---------------------------------------------------------------- Calcul des primes
+export function computePrimes(rdvs, bareme) {
+  // Une prime par RDV (racine ou sous-RDV) dont la phase est SQL ou Signée,
+  // déclenchée à la date de passage en SQL (fallback : date de prise de RDV).
+  const primes = []
+  rdvs.forEach(r => {
+    if (!(r.phase === 'SQL' || r.phase === 'Signée')) return
+    const trigger = r.datePassageSQL || r.datePriseRdv || r.dateRdv || r.createdAt
+    const eff = Number(r.effectif) || 0
+    const row = bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max) && (!b.leadSource || b.leadSource === r.source))
+      || bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max))
+    if (!row) return
+    const payMonth = primePaymentMonth(trigger)
+    primes.push({
+      rdvId: r.id, entreprise: r.entreprise, effectif: eff, source: r.source,
+      montant: Number(row.montant) || 0, triggerDate: trigger,
+      payMonth, payMonthKey: payMonth ? monthKey(payMonth) : null,
+      payMonthLabel: payMonth ? monthLabel(payMonth) : '—',
+    })
+  })
+  return primes
+}
+
+// ---------------------------------------------------------------- Store React
+const Ctx = createContext(null)
+
+function load() {
+  try {
+    const raw = localStorage.getItem(LS_KEY)
+    if (raw) return JSON.parse(raw)
+  } catch (e) { /* base corrompue : on repart du seed */ }
+  return buildSeedDb()
+}
+
+export function StoreProvider({ children }) {
+  const [db, setDbState] = useState(load)
+  const [session, setSession] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)) } catch (e) { return null }
+  })
+
+  useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(db)) }, [db])
+  useEffect(() => { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
+
+  const api = useMemo(() => {
+    const setDb = (fn) => setDbState(prev => {
+      const next = typeof fn === 'function' ? fn(structuredClone(prev)) : fn
+      return next
+    })
+    return {
+      db, setDb, session, setSession,
+      account: session ? db.accounts.find(a => a.id === session.accountId) : null,
+      login(identifier, password) {
+        const acc = db.accounts.find(a =>
+          (a.email.toLowerCase() === identifier.toLowerCase() || a.pseudo.toLowerCase() === identifier.toLowerCase())
+          && a.password === password)
+        if (acc) setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
+        return acc
+      },
+      register({ email, pseudo, password }) {
+        if (db.accounts.some(a => a.email.toLowerCase() === email.toLowerCase())) return { error: 'Un compte existe déjà avec cet email.' }
+        const acc = { id: uid(), email, pseudo: pseudo || email.split('@')[0], password, role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null }
+        setDb(d => { d.accounts.push(acc); return d })
+        setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
+        return { account: acc }
+      },
+      logout() { setSession(null) },
+      enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
+      enterSubEnv(subEnvId) { setSession(s => ({ ...s, subEnvId })) },
+      createEnv({ name, logo }) {
+        const env = { id: uid(), name, logo: logo || '', pin: '', createdBy: session.accountId, departments: ['Marketing', 'Sales'] }
+        setDb(d => { d.environments.push(env); return d })
+        return env
+      },
+      createSubEnv(envId, { prenom, nom, poste, service, pin }) {
+        const sub = { id: uid(), envId, prenom, nom, poste, service, pin: pin || '0000', photo: '', ownerId: session.accountId }
+        setDb(d => { d.subenvs.push(sub); d.data[sub.id] = emptySubEnvData(); return d })
+        return sub
+      },
+      updateEnv(envId, patch) { setDb(d => { Object.assign(d.environments.find(e => e.id === envId), patch); return d }) },
+      deleteEnv(envId) {
+        setDb(d => {
+          d.subenvs.filter(s => s.envId === envId).forEach(s => delete d.data[s.id])
+          d.subenvs = d.subenvs.filter(s => s.envId !== envId)
+          d.environments = d.environments.filter(e => e.id !== envId)
+          return d
+        })
+      },
+      updateSubEnv(subId, patch) { setDb(d => { Object.assign(d.subenvs.find(s => s.id === subId), patch); return d }) },
+      deleteSubEnv(subId) { setDb(d => { d.subenvs = d.subenvs.filter(s => s.id !== subId); delete d.data[subId]; return d }) },
+      // ----- données du sous-environnement courant
+      sub: session?.subEnvId ? db.data[session.subEnvId] : null,
+      setSub(fn) {
+        const subId = session?.subEnvId
+        if (!subId) return
+        setDb(d => { d.data[subId] = fn(d.data[subId]); return d })
+      },
+      // ----- comptes (administration)
+      updateAccount(id, patch) { setDb(d => { Object.assign(d.accounts.find(a => a.id === id), patch); return d }) },
+      deleteAccount(id) { setDb(d => { d.accounts = d.accounts.filter(a => a.id !== id); return d }) },
+      addAccount(acc) {
+        const a = { id: uid(), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null, ...acc }
+        setDb(d => { d.accounts.push(a); return d })
+        return a
+      },
+    }
+  }, [db, session])
+
+  return <Ctx.Provider value={api}>{children}</Ctx.Provider>
+}
+
+export const useStore = () => useContext(Ctx)
+
+// ---------------------------------------------------------------- Mutations RDV avec automatisations
+export function applyRdvAutomations(rdv, patch) {
+  // Retourne le patch enrichi par les règles d'automatisation + entrées d'historique.
+  const out = { ...patch }
+  const hist = []
+  const day = todayISO()
+  if ('opportunite' in patch && patch.opportunite !== rdv.opportunite) {
+    hist.push({ type: 'opportunite', value: patch.opportunite, date: day })
+    if (patch.opportunite === 'Perdue') { out.phase = 'KO' }
+    if (patch.opportunite === 'Gagnée') { out.phase = 'SQL' }
+    if (patch.opportunite === 'Signée') { out.phase = 'Signée' }
+  }
+  if ('phase' in out && out.phase !== rdv.phase) {
+    hist.push({ type: 'phase', value: out.phase, date: day })
+  }
+  if (hist.length) out.history = [...(rdv.history || []), ...hist]
+  return out
+}
+
+export function rdvNeedsSqlDate(rdv, patch) {
+  const newPhase = patch.phase ?? rdv.phase
+  const newOpp = patch.opportunite ?? rdv.opportunite
+  const becomesSQL = (newPhase === 'SQL' || newPhase === 'Signée' || newOpp === 'Gagnée' || newOpp === 'Signée')
+  return becomesSQL && !rdv.datePassageSQL && !patch.datePassageSQL
+}
+
+// Synchronise les contacts d'un RDV vers le répertoire "Mes contacts"
+export function syncContacts(data, rdv) {
+  const existing = new Set(data.contacts.map(c => (c.email || c.nom || '').toLowerCase()))
+  ;(rdv.contacts || []).forEach(c => {
+    const k = (c.email || c.nom || '').toLowerCase()
+    if (!k || existing.has(k)) return
+    existing.add(k)
+    data.contacts.push({
+      id: uid(), nom: c.nom || '', poste: c.poste || '', email: c.email || '', tel: c.tel || '',
+      entreprise: rdv.entreprise || '', secteur: rdv.secteur || '', linkedin: rdv.linkedin || '',
+      source: rdv.source || '', createdAt: todayISO(),
+    })
+  })
+  return data
+}
