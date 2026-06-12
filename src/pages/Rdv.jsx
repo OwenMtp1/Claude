@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
-import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline } from '../store.jsx'
+import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft } from 'lucide-react'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty } from '../ui.jsx'
+import { openCompany } from './Company.jsx'
 
 const emptyContact = () => ({ id: uid(), nom: '', poste: '', email: '', tel: '' })
 
@@ -14,12 +15,19 @@ function emptyForm() {
 }
 
 // ---------------------------------------------------------------- Formulaire RDV
-function RdvForm({ initial, title, onSave, onClose, sub, setSubList }) {
+function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate }) {
   const [f, setF] = useState(initial)
   const [err, setErr] = useState('')
   const visible = (k) => sub.fieldsConfig.find(c => c.key === k)?.visible !== false
   const set = (k, v) => setF(x => ({ ...x, [k]: v }))
   const setContact = (i, k, v) => setF(x => ({ ...x, contacts: x.contacts.map((c, j) => j === i ? { ...c, [k]: v } : c) }))
+
+  // Détection de doublons : entreprise déjà suivie / email déjà connu
+  const dupRdvs = isCreate && f.entreprise.trim().length > 1
+    ? sub.rdvs.filter(r => (r.entreprise || '').trim().toLowerCase() === f.entreprise.trim().toLowerCase())
+    : []
+  const dupEmails = f.contacts.map(c => c.email.trim().toLowerCase()).filter(e =>
+    e && sub.contacts.some(c => (c.email || '').toLowerCase() === e))
 
   const submit = () => {
     if (!f.phase || !f.entreprise || !f.provenance) {
@@ -101,12 +109,67 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList }) {
         </div>
       )}
 
+      {dupRdvs.length > 0 && (
+        <div className="mt-3 rounded-xl bg-amber-50 border border-amber-300 p-3 text-xs text-amber-800 flex gap-2">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span><b>Doublon possible :</b> « {f.entreprise} » a déjà {dupRdvs.length} rendez-vous ({dupRdvs.map(r => r.phase).join(', ')}).
+            Si c'est une suite, préférez « Créer le rendez-vous suivant » depuis le menu ⋯ du RDV existant.</span>
+        </div>
+      )}
+      {dupEmails.length > 0 && (
+        <div className="mt-2 rounded-xl bg-sky-50 border border-sky-300 p-3 text-xs text-sky-800 flex gap-2">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>Contact déjà connu ({dupEmails.join(', ')}) : il ne sera pas dupliqué dans Mes contacts.</span>
+        </div>
+      )}
       {err && <p className="text-red-500 text-sm mt-3">{err}</p>}
       <div className="flex justify-end gap-2 mt-5">
         <button className="btn-ghost" onClick={onClose}>Annuler</button>
         <button className="btn-primary" onClick={submit}>Enregistrer le rendez-vous</button>
       </div>
     </Modal>
+  )
+}
+
+// ---------------------------------------------------------------- Vue calendrier
+function CalendarView({ rdvs, onOpen }) {
+  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
+  const first = new Date(month)
+  const startOffset = (first.getDay() + 6) % 7 // lundi = 0
+  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
+  const cells = []
+  for (let i = 0; i < startOffset; i++) cells.push(null)
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
+  const iso = (d) => `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const today = todayISO()
+  return (
+    <div className="card p-4">
+      <div className="flex items-center justify-between mb-3">
+        <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}><ChevronLeft size={17} /></button>
+        <span className="font-bold capitalize">{month.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</span>
+        <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}><ChevronRight size={17} /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold text-muted mb-1">
+        {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d}>{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1.5">
+        {cells.map((d, i) => {
+          if (!d) return <div key={'e' + i} />
+          const dayRdvs = rdvs.filter(r => r.dateRdv === iso(d))
+          return (
+            <div key={d} className={`min-h-[4.5rem] rounded-lg border p-1 text-left ${iso(d) === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'}`}>
+              <div className={`text-[11px] font-bold ${iso(d) === today ? 'text-brand' : 'text-muted'}`}>{d}</div>
+              {dayRdvs.map(r => (
+                <button key={r.id} onClick={() => onOpen(r)} title={`${r.entreprise} — ${r.phase}`}
+                  className={`block w-full truncate text-left text-[10px] font-semibold rounded px-1 py-0.5 mt-0.5 ${PHASE_COLORS[r.phase] || 'bg-card text-ink'}`}>
+                  {r.entreprise}
+                </button>
+              ))}
+            </div>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
@@ -128,6 +191,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [fProv, setFProv] = useState('')
   const [sort, setSort] = useState('date-desc')
   const [dateCustom, setDateCustom] = useState({ start: '', end: '' })
+  const [view, setView] = useState('table') // 'table' | 'calendar'
 
   React.useEffect(() => {
     if (pendingNote) {
@@ -244,7 +308,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           {sub.opportunites.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </td>}
-      <td className="font-semibold">{r.entreprise}</td>
+      <td><button className="font-semibold hover:text-brand hover:underline text-left" title="Ouvrir la fiche entreprise" onClick={() => openCompany(r.entreprise)}>{r.entreprise}</button></td>
       {visible('effectif') && <td className="text-center">{r.effectif || '—'}</td>}
       {visible('contact') && <td>{(r.contacts || []).map(c => c.nom).filter(Boolean).join(', ') || '—'}</td>}
       {visible('poste') && <td className="text-muted">{(r.contacts || []).map(c => c.poste).filter(Boolean).join(', ') || '—'}</td>}
@@ -276,11 +340,22 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold">Mes Rendez-vous</h2>
         <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-line overflow-hidden">
+            <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'table' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
+              onClick={() => setView('table')} title="Vue tableau"><TableIcon size={13} /> Tableau</button>
+            <button className={`px-2.5 py-1.5 text-xs font-semibold flex items-center gap-1 ${view === 'calendar' ? 'bg-brand text-white' : 'bg-card text-muted'}`}
+              onClick={() => setView('calendar')} title="Vue calendrier"><CalendarDays size={13} /> Calendrier</button>
+          </div>
           <button className="btn-ghost text-xs" title="Modifier les champs" onClick={() => setFieldsModal(true)}><Settings2 size={15} /> Modifier les champs</button>
           <button className="btn-primary" onClick={() => setForm({ mode: 'create', data: emptyForm() })}><Plus size={16} /> Créer un RDV</button>
         </div>
       </div>
 
+      {view === 'calendar' && (
+        <CalendarView rdvs={sub.rdvs} onOpen={(r) => setForm({ mode: 'edit', id: r.id, data: { ...r } })} />
+      )}
+
+      {view === 'table' && <>
       <div className="card p-3 flex items-center gap-2 flex-wrap text-xs">
         <Select value={fSource} onChange={setFSource} options={SOURCES} placeholder="Source : toutes" className="!w-auto !py-1.5" />
         <Select value={fPhase} onChange={setFPhase} options={sub.phases} placeholder="Phase : toutes" className="!w-auto !py-1.5" />
@@ -338,11 +413,12 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           </tbody>
         </table>
       </div>
+      </>}
 
       {form && (
         <RdvForm
           title={form.mode === 'create' ? 'Créer un RDV' : form.mode === 'sub' ? 'Créer le rendez-vous suivant' : 'Modifier le RDV'}
-          initial={form.data} sub={sub} setSubList={setSubList}
+          initial={form.data} sub={sub} setSubList={setSubList} isCreate={form.mode === 'create'}
           onSave={(data) => saveRdv(data, form.mode, form.id)}
           onClose={() => setForm(null)}
         />

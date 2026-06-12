@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, ShieldCheck } from 'lucide-react'
+import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck } from 'lucide-react'
 import { useStore } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
 import { Modal, Field, Confirm } from '../ui.jsx'
@@ -47,6 +47,8 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const [tab, setTab] = useState('ux')
   const [pendingTheme, setPendingTheme] = useState(currentTheme)
   const [confirmDelEnv, setConfirmDelEnv] = useState(null)
+  const [importMsg, setImportMsg] = useState('')
+  const importRef = useRef(null)
   const me = store.account
   const session = store.session
   const env = store.db.environments.find(e => e.id === session.envId)
@@ -181,6 +183,40 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             </div>
           )}
           <p className="text-xs text-muted">Astuce : ce fichier téléchargé contient lui-même le bouton de téléchargement, vous pourrez donc toujours en regénérer une copie à jour.</p>
+
+          <div className="border-t border-line pt-3 space-y-2">
+            <h4 className="font-bold text-sm">Sauvegarde & restauration des données</h4>
+            <p className="text-xs text-muted">Exportez l'intégralité de vos données (tous les environnements, espaces, RDV, notes, contacts, barèmes…) dans un fichier JSON, et restaurez-les sur n'importe quelle copie de l'app.</p>
+            <div className="flex gap-2 flex-wrap">
+              <button className="btn-ghost text-xs" onClick={() => {
+                const blob = new Blob([JSON.stringify(store.db, null, 2)], { type: 'application/json' })
+                const a = document.createElement('a')
+                a.href = URL.createObjectURL(blob)
+                a.download = `bdr-flow-pro-sauvegarde-${new Date().toISOString().slice(0, 10)}.json`
+                a.click()
+                URL.revokeObjectURL(a.href)
+              }}><Download size={14} /> Exporter mes données (JSON)</button>
+              <input type="file" accept=".json" ref={importRef} className="hidden" onChange={e => {
+                const f = e.target.files[0]
+                if (!f) return
+                const r = new FileReader()
+                r.onload = () => {
+                  try {
+                    const data = JSON.parse(String(r.result))
+                    if (!data.accounts || !data.environments) throw new Error('format')
+                    store.setDb(data)
+                    setImportMsg('✅ Données restaurées avec succès.')
+                  } catch (err) {
+                    setImportMsg('❌ Fichier invalide : ce n\'est pas une sauvegarde BDR Flow Pro.')
+                  }
+                }
+                r.readAsText(f)
+                e.target.value = ''
+              }} />
+              <button className="btn-ghost text-xs" onClick={() => importRef.current.click()}><Upload size={14} /> Restaurer une sauvegarde</button>
+            </div>
+            {importMsg && <p className="text-xs font-semibold">{importMsg}</p>}
+          </div>
         </div>
       )}
 

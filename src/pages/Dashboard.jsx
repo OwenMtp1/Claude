@@ -12,8 +12,92 @@ const DEFAULT_WIDGETS = [
   { id: 'provenance', label: 'Provenance des RDV', size: 'md' },
   { id: 'postes', label: 'Postes des contacts', size: 'md' },
   { id: 'signatures', label: 'Signatures & Opportunités', size: 'lg' },
+  { id: 'velocite', label: 'Vélocité du pipeline', size: 'lg' },
+  { id: 'rapport', label: 'Mon rapport', size: 'lg' },
   { id: 'conversion', label: 'Taux de conversion croisés', size: 'lg' },
 ]
+
+// ---- Vélocité : temps moyen passé dans chaque phase (d'après l'historique des RDV)
+function pipelineVelocity(rdvs) {
+  const durations = {} // phase -> [jours]
+  rdvs.forEach(r => {
+    const phases = (r.history || []).filter(h => h.type === 'phase' || ['R1', 'R2', 'MQL', 'SQL', 'Signée', 'KO'].includes(h.value))
+    for (let i = 0; i < phases.length; i++) {
+      const d1 = parseISO(phases[i].date)
+      const d2 = i + 1 < phases.length ? parseISO(phases[i + 1].date) : (['KO', 'Signée'].includes(r.phase) ? null : new Date())
+      if (!d1 || !d2) continue
+      const days = Math.max(0, Math.round((d2 - d1) / 86400000))
+      ;(durations[phases[i].value] = durations[phases[i].value] || []).push(days)
+    }
+  })
+  return Object.entries(durations).map(([phase, arr]) => ({
+    phase, avg: arr.reduce((a, b) => a + b, 0) / arr.length, n: arr.length,
+  })).sort((a, b) => b.avg - a.avg)
+}
+
+// ---- Rapport périodique : bornes de la période courante et de la précédente
+function periodRange(mode) {
+  const now = new Date(); now.setHours(0, 0, 0, 0)
+  let start, end, prevStart, prevEnd
+  if (mode === 'week') {
+    start = startOfWeek(now); end = new Date(start); end.setDate(end.getDate() + 7)
+    prevStart = new Date(start); prevStart.setDate(prevStart.getDate() - 7); prevEnd = new Date(start)
+  } else if (mode === 'month') {
+    start = new Date(now.getFullYear(), now.getMonth(), 1); end = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    prevStart = new Date(now.getFullYear(), now.getMonth() - 1, 1); prevEnd = new Date(start)
+  } else if (mode === 'quarter') {
+    const q = Math.floor(now.getMonth() / 3)
+    start = new Date(now.getFullYear(), q * 3, 1); end = new Date(now.getFullYear(), q * 3 + 3, 1)
+    prevStart = new Date(now.getFullYear(), q * 3 - 3, 1); prevEnd = new Date(start)
+  } else {
+    start = new Date(now.getFullYear(), 0, 1); end = new Date(now.getFullYear() + 1, 0, 1)
+    prevStart = new Date(now.getFullYear() - 1, 0, 1); prevEnd = new Date(start)
+  }
+  return { start, end, prevStart, prevEnd }
+}
+
+function reportStats(rdvs, bareme, mode) {
+  const { start, end, prevStart, prevEnd } = periodRange(mode)
+  const within = (dateStr, s, e) => { const d = parseISO(dateStr); return d && d >= s && d < e }
+  const compute = (s, e) => {
+    const real = rdvs.filter(r => within(r.dateRdv, s, e))
+    return {
+      pris: rdvs.filter(r => within(r.datePriseRdv, s, e)).length,
+      realises: real.length,
+      mql: real.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase)).length,
+      sql: rdvs.filter(r => within(r.datePassageSQL, s, e)).length,
+      signatures: real.filter(r => r.phase === 'Signée').length,
+      primes: computePrimes(rdvs.filter(r => within(r.datePassageSQL || r.datePriseRdv, s, e)), bareme).reduce((a, p) => a + p.montant, 0),
+    }
+  }
+  return { cur: compute(start, end), prev: compute(prevStart, prevEnd), start, end }
+}
+
+function exportReportPDF(stats, modeLabel) {
+  const row = (label, cur, prev, unit = '') => {
+    const delta = cur - prev
+    return `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee">${label}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #eee;font-weight:bold">${cur}${unit}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #eee;color:#888">${prev}${unit}</td>
+      <td style="padding:6px 12px;border-bottom:1px solid #eee;color:${delta >= 0 ? '#059669' : '#dc2626'}">${delta >= 0 ? '+' : ''}${delta}${unit}</td></tr>`
+  }
+  const html = `<html><head><meta charset="utf-8"><title>Rapport BDR</title></head><body style="font-family:sans-serif">
+    <h1>Rapport BDR — ${modeLabel}</h1>
+    <p style="color:#666">Généré le ${new Date().toLocaleDateString('fr-FR')}</p>
+    <table style="border-collapse:collapse"><tr style="text-align:left;color:#888">
+      <th style="padding:6px 12px">Indicateur</th><th style="padding:6px 12px">Période</th><th style="padding:6px 12px">Précédente</th><th style="padding:6px 12px">Variation</th></tr>
+    ${row('RDV pris', stats.cur.pris, stats.prev.pris)}
+    ${row('RDV réalisés', stats.cur.realises, stats.prev.realises)}
+    ${row('MQL', stats.cur.mql, stats.prev.mql)}
+    ${row('SQL', stats.cur.sql, stats.prev.sql)}
+    ${row('Signatures', stats.cur.signatures, stats.prev.signatures)}
+    ${row('Primes', stats.cur.primes, stats.prev.primes, ' €')}
+    </table></body></html>`
+  const w = window.open('', '_blank')
+  w.document.write(html)
+  w.document.close()
+  w.print()
+}
 
 function buildSeries(rdvs, dateKey, timeline, custom) {
   const filtered = rdvs.filter(r => inTimeline(r[dateKey], timeline, custom))
@@ -118,8 +202,14 @@ export default function Dashboard() {
   const [perfMode, setPerfMode] = useState('week')
   const [perfCustom, setPerfCustom] = useState({})
   const [posteFilter, setPosteFilter] = useState('')
+  const [reportMode, setReportMode] = useState('week')
 
-  const widgets = sub.widgets || DEFAULT_WIDGETS.map(w => ({ id: w.id, visible: true, size: w.size }))
+  // Fusionne la config sauvegardée avec les widgets ajoutés depuis (ils apparaissent à la fin).
+  const saved = sub.widgets || []
+  const widgets = sub.widgets
+    ? [...saved.filter(w => DEFAULT_WIDGETS.some(d => d.id === w.id)),
+       ...DEFAULT_WIDGETS.filter(d => !saved.some(w => w.id === d.id)).map(w => ({ id: w.id, visible: true, size: w.size }))]
+    : DEFAULT_WIDGETS.map(w => ({ id: w.id, visible: true, size: w.size }))
   const setWidgets = (w) => store.setSub(d => ({ ...d, widgets: w }))
 
   const showDetails = (list, title) => setDetail({ list, title })
@@ -260,6 +350,67 @@ export default function Dashboard() {
             )}
           </div>
         )
+      case 'velocite': {
+        const velo = pipelineVelocity(rdvs)
+        const maxAvg = Math.max(1, ...velo.map(v => v.avg))
+        return (
+          <div className="card p-4">
+            <h3 className="font-bold mb-1">Vélocité du pipeline</h3>
+            <p className="text-xs text-muted mb-3">Temps moyen passé dans chaque phase. La plus lente est votre goulot d'étranglement.</p>
+            {velo.length === 0 ? <Empty text="Pas encore assez d'historique." /> : (
+              <div className="space-y-2">
+                {velo.map((v, i) => (
+                  <div key={v.phase} className="flex items-center gap-2">
+                    <span className="text-sm font-semibold w-16">{v.phase}</span>
+                    <div className="flex-1 h-2.5 bg-surface rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${i === 0 ? 'bg-red-500' : 'bg-brand'}`} style={{ width: `${(v.avg / maxAvg) * 100}%` }} />
+                    </div>
+                    <span className="text-xs text-muted w-28 text-right">{v.avg.toFixed(1)} j en moyenne {i === 0 && velo.length > 1 ? '🐢' : ''}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )
+      }
+      case 'rapport': {
+        const modeLabels = { week: 'Cette semaine', month: 'Ce mois-ci', quarter: 'Ce trimestre', year: 'Cette année' }
+        const stats = reportStats(rdvs, sub.bareme, reportMode)
+        const Delta = ({ cur, prev }) => {
+          const d = cur - prev
+          return <span className={`text-xs font-bold ${d > 0 ? 'text-emerald-600' : d < 0 ? 'text-red-500' : 'text-muted'}`}>{d > 0 ? '▲' : d < 0 ? '▼' : '='} {d >= 0 ? '+' : ''}{d}</span>
+        }
+        const items = [
+          ['RDV pris', stats.cur.pris, stats.prev.pris], ['RDV réalisés', stats.cur.realises, stats.prev.realises],
+          ['MQL', stats.cur.mql, stats.prev.mql], ['SQL', stats.cur.sql, stats.prev.sql],
+          ['Signatures', stats.cur.signatures, stats.prev.signatures], ['Primes (€)', stats.cur.primes, stats.prev.primes],
+        ]
+        return (
+          <div className="card p-4">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+              <h3 className="font-bold">Mon rapport <span className="text-muted text-xs font-semibold">vs période précédente</span></h3>
+              <div className="flex items-center gap-2">
+                <select className="input !w-auto !py-1.5 text-xs font-semibold" value={reportMode} onChange={e => setReportMode(e.target.value)}>
+                  <option value="week">Hebdomadaire</option>
+                  <option value="month">Mensuel</option>
+                  <option value="quarter">Trimestriel</option>
+                  <option value="year">Annuel</option>
+                </select>
+                <button className="btn-ghost !py-1.5 text-xs" onClick={() => exportReportPDF(stats, modeLabels[reportMode])}>Exporter en PDF</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+              {items.map(([l, cur, prev]) => (
+                <div key={l} className="rounded-xl bg-surface p-2.5 text-center">
+                  <div className="text-xl font-extrabold">{cur}</div>
+                  <div className="text-[11px] text-muted font-semibold">{l}</div>
+                  <Delta cur={cur} prev={prev} />
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      }
       case 'conversion':
         return (
           <div className="card p-4">
