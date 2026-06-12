@@ -99,7 +99,7 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
               </div>
             </div>
           ))}
-          <button className="btn-primary" onClick={() => { applyTheme(pendingTheme); onThemeSaved(pendingTheme) }}>Sauvegarder le thème</button>
+          <button className="btn-primary" onClick={() => { applyTheme(pendingTheme); onThemeSaved(pendingTheme); store.logAction('Paramètres', 'Thème appliqué', THEMES.find(t => t.id === pendingTheme)?.name || pendingTheme) }}>Sauvegarder le thème</button>
         </div>
       )}
 

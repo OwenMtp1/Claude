@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote } from 'lucide-react'
+import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2 } from 'lucide-react'
 import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS } from '../store.jsx'
 import { Modal, Field, Empty } from '../ui.jsx'
 
@@ -7,6 +7,52 @@ import { Modal, Field, Empty } from '../ui.jsx'
 export function openCompany(name) {
   if (!name) return
   window.dispatchEvent(new CustomEvent('open-company', { detail: name }))
+}
+
+// Fil de commentaires partagé : stocké au niveau de l'environnement, visible par tous ses membres.
+function CommentThread({ name, store }) {
+  const [text, setText] = useState('')
+  const env = store.db.environments.find(e => e.id === store.session.envId)
+  const curSub = store.db.subenvs.find(s => s.id === store.session.subEnvId)
+  const comments = (env?.comments || {})[name.trim()] || []
+  const fmtTs = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const send = () => {
+    if (!text.trim()) return
+    store.addCompanyComment(name, text)
+    store.logAction('Lead', 'Commentaire ajouté', name)
+    setText('')
+  }
+  return (
+    <div>
+      <p className="label flex items-center gap-1.5"><MessageSquare size={13} /> Commentaires d'équipe ({comments.length}) <span className="normal-case font-normal">— visibles par toute l'organisation</span></p>
+      <div className="space-y-1.5 mb-2">
+        {comments.length === 0 && <p className="text-xs text-muted">Aucun commentaire. Soyez le premier à partager une info sur ce compte.</p>}
+        {comments.map(c => (
+          <div key={c.id} className="flex items-start gap-2 p-2 rounded-lg bg-surface text-sm">
+            <div className="w-7 h-7 rounded-full bg-brand/15 text-brand text-[10px] font-extrabold flex items-center justify-center shrink-0">
+              {c.author.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-xs">{c.author}</span>
+                <span className="text-[10px] text-muted">{fmtTs(c.ts)}</span>
+              </div>
+              <p className="text-sm whitespace-pre-wrap">{c.text}</p>
+            </div>
+            {c.authorSubId === curSub?.id && (
+              <button className="p-1 rounded hover:bg-card text-red-400" title="Supprimer mon commentaire"
+                onClick={() => store.deleteCompanyComment(name, c.id)}><Trash2 size={12} /></button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input className="input !py-1.5 text-sm" placeholder="Ajouter un commentaire pour l'équipe..." value={text}
+          onChange={e => setText(e.target.value)} onKeyDown={e => e.key === 'Enter' && send()} />
+        <button className="btn-primary !px-2.5" onClick={send}><Send size={14} /></button>
+      </div>
+    </div>
+  )
 }
 
 // Modale "Fiche entreprise" : tous les RDV, contacts et notes de la société + infos société éditables.
@@ -97,6 +143,9 @@ export default function CompanyModal() {
             </div>
           )}
         </div>
+
+        {/* Commentaires partagés (visibles par toute l'organisation) */}
+        <CommentThread name={name} store={store} />
 
         {/* Notes liées */}
         {notes.length > 0 && (

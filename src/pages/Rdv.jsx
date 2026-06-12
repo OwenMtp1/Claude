@@ -131,44 +131,132 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate })
   )
 }
 
-// ---------------------------------------------------------------- Vue calendrier
+// ---------------------------------------------------------------- Vue calendrier (jour / semaine / mois / année)
+const dayISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+function RdvPill({ r, onOpen, full }) {
+  return (
+    <button onClick={() => onOpen(r)} title={`${r.entreprise} — ${r.phase}`}
+      className={`block w-full truncate text-left font-semibold rounded px-1.5 py-0.5 mt-0.5 ${full ? 'text-xs' : 'text-[10px]'} ${PHASE_COLORS[r.phase] || 'bg-card text-ink'}`}>
+      {r.entreprise}{full ? ` · ${r.phase}` : ''}
+    </button>
+  )
+}
+
 function CalendarView({ rdvs, onOpen }) {
-  const [month, setMonth] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1) })
-  const first = new Date(month)
-  const startOffset = (first.getDay() + 6) % 7 // lundi = 0
-  const daysInMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
-  const cells = []
-  for (let i = 0; i < startOffset; i++) cells.push(null)
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-  const iso = (d) => `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+  const [mode, setMode] = useState('month') // 'day' | 'week' | 'month' | 'year'
+  const [cursor, setCursor] = useState(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })
   const today = todayISO()
+
+  const shift = (dir) => setCursor(c => {
+    const d = new Date(c)
+    if (mode === 'day') d.setDate(d.getDate() + dir)
+    if (mode === 'week') d.setDate(d.getDate() + dir * 7)
+    if (mode === 'month') d.setMonth(d.getMonth() + dir)
+    if (mode === 'year') d.setFullYear(d.getFullYear() + dir)
+    return d
+  })
+
+  const titles = {
+    day: cursor.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+    week: (() => { const s = new Date(cursor); s.setDate(s.getDate() - ((s.getDay() + 6) % 7)); const e = new Date(s); e.setDate(e.getDate() + 6); return `${s.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} → ${e.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}` })(),
+    month: cursor.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+    year: String(cursor.getFullYear()),
+  }
+
   return (
     <div className="card p-4">
-      <div className="flex items-center justify-between mb-3">
-        <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))}><ChevronLeft size={17} /></button>
-        <span className="font-bold capitalize">{month.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}</span>
-        <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => setMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))}><ChevronRight size={17} /></button>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-1">
+          <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => shift(-1)}><ChevronLeft size={17} /></button>
+          <span className="font-bold capitalize min-w-[12rem] text-center">{titles[mode]}</span>
+          <button className="p-1.5 rounded-lg hover:bg-surface" onClick={() => shift(1)}><ChevronRight size={17} /></button>
+          <button className="btn-ghost !py-1 text-xs ml-1" onClick={() => setCursor(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d })}>Aujourd'hui</button>
+        </div>
+        <div className="flex rounded-lg border border-line overflow-hidden">
+          {[['day', 'Jour'], ['week', 'Semaine'], ['month', 'Mois'], ['year', 'Année']].map(([m, l]) => (
+            <button key={m} className={`px-3 py-1.5 text-xs font-semibold ${mode === m ? 'bg-brand text-white' : 'bg-card text-muted hover:bg-surface'}`}
+              onClick={() => setMode(m)}>{l}</button>
+          ))}
+        </div>
       </div>
-      <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold text-muted mb-1">
-        {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d}>{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((d, i) => {
-          if (!d) return <div key={'e' + i} />
-          const dayRdvs = rdvs.filter(r => r.dateRdv === iso(d))
-          return (
-            <div key={d} className={`min-h-[4.5rem] rounded-lg border p-1 text-left ${iso(d) === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'}`}>
-              <div className={`text-[11px] font-bold ${iso(d) === today ? 'text-brand' : 'text-muted'}`}>{d}</div>
-              {dayRdvs.map(r => (
-                <button key={r.id} onClick={() => onOpen(r)} title={`${r.entreprise} — ${r.phase}`}
-                  className={`block w-full truncate text-left text-[10px] font-semibold rounded px-1 py-0.5 mt-0.5 ${PHASE_COLORS[r.phase] || 'bg-card text-ink'}`}>
-                  {r.entreprise}
-                </button>
-              ))}
-            </div>
-          )
-        })}
-      </div>
+
+      {mode === 'day' && (() => {
+        const list = rdvs.filter(r => r.dateRdv === dayISO(cursor))
+        return list.length === 0 ? <Empty text="Aucun rendez-vous ce jour." /> : (
+          <div className="space-y-1.5">{list.map(r => (
+            <button key={r.id} onClick={() => onOpen(r)} className="w-full card !rounded-xl p-3 text-left hover:bg-surface flex items-center gap-3 flex-wrap">
+              <span className={`chip ${PHASE_COLORS[r.phase] || 'bg-surface'}`}>{r.phase}</span>
+              <span className="font-bold text-sm">{r.entreprise}</span>
+              <span className="text-xs text-muted">{(r.contacts || []).map(c => c.nom).filter(Boolean).join(', ')}</span>
+            </button>
+          ))}</div>
+        )
+      })()}
+
+      {mode === 'week' && (() => {
+        const start = new Date(cursor); start.setDate(start.getDate() - ((start.getDay() + 6) % 7))
+        const days = [...Array(7)].map((_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d })
+        return (
+          <div className="grid grid-cols-7 gap-1.5">
+            {days.map(d => {
+              const k = dayISO(d)
+              const list = rdvs.filter(r => r.dateRdv === k)
+              return (
+                <div key={k} className={`min-h-[8rem] rounded-lg border p-1.5 ${k === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'}`}>
+                  <div className={`text-[11px] font-bold mb-1 ${k === today ? 'text-brand' : 'text-muted'}`}>
+                    {d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' })}
+                  </div>
+                  {list.map(r => <RdvPill key={r.id} r={r} onOpen={onOpen} />)}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })()}
+
+      {mode === 'month' && (() => {
+        const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
+        const startOffset = (first.getDay() + 6) % 7
+        const daysInMonth = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0).getDate()
+        const cells = [...Array(startOffset).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+        const iso = (d) => `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+        return (<>
+          <div className="grid grid-cols-7 gap-1.5 text-center text-[11px] font-bold text-muted mb-1">
+            {['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map(d => <div key={d}>{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1.5">
+            {cells.map((d, i) => {
+              if (!d) return <div key={'e' + i} />
+              const dayRdvs = rdvs.filter(r => r.dateRdv === iso(d))
+              return (
+                <div key={d} className={`min-h-[4.5rem] rounded-lg border p-1 text-left ${iso(d) === today ? 'border-brand bg-brand/5' : 'border-line bg-surface/50'}`}>
+                  <div className={`text-[11px] font-bold ${iso(d) === today ? 'text-brand' : 'text-muted'}`}>{d}</div>
+                  {dayRdvs.map(r => <RdvPill key={r.id} r={r} onOpen={onOpen} />)}
+                </div>
+              )
+            })}
+          </div>
+        </>)
+      })()}
+
+      {mode === 'year' && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+          {[...Array(12)].map((_, m) => {
+            const prefix = `${cursor.getFullYear()}-${String(m + 1).padStart(2, '0')}`
+            const count = rdvs.filter(r => (r.dateRdv || '').startsWith(prefix)).length
+            const label = new Date(cursor.getFullYear(), m, 1).toLocaleDateString('fr-FR', { month: 'long' })
+            return (
+              <button key={m} onClick={() => { setCursor(new Date(cursor.getFullYear(), m, 1)); setMode('month') }}
+                className="rounded-xl border border-line bg-surface/50 hover:border-brand p-3 text-left">
+                <div className="font-bold text-sm capitalize">{label}</div>
+                <div className={`text-2xl font-extrabold ${count ? 'text-brand' : 'text-muted'}`}>{count}</div>
+                <div className="text-[11px] text-muted">RDV</div>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -221,6 +309,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       }
       return d
     })
+    store.logAction('RDV', mode === 'edit' ? 'RDV modifié' : mode === 'sub' ? 'RDV suivant créé' : 'RDV créé', data.entreprise)
     setForm(null)
   }
 
@@ -234,6 +323,8 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       Object.assign(r, applyRdvAutomations(r, patch))
       return d
     })
+    const what = Object.entries(patch).map(([k, v]) => `${k} → ${v}`).join(', ')
+    store.logAction('RDV', 'Champ modifié', `${rdv.entreprise} : ${what}`)
   }
 
   const confirmSqlDate = () => {
@@ -243,11 +334,14 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
       Object.assign(r, applyRdvAutomations(r, { ...patch, datePassageSQL: date }))
       return d
     })
+    store.logAction('RDV', 'Passage en SQL', `le ${date}`)
     setSqlAsk(null)
   }
 
   const deleteRdv = (id) => {
-    store.setSub(d => ({ ...d, rdvs: d.rdvs.filter(r => r.id !== id && r.parentId !== id) }))
+    const r = sub.rdvs.find(x => x.id === id)
+    store.setSub(d => ({ ...d, rdvs: d.rdvs.filter(x => x.id !== id && x.parentId !== id) }))
+    store.logAction('RDV', 'RDV supprimé', r?.entreprise || '')
     setConfirmDel(null)
   }
 

@@ -1,7 +1,92 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronRight, Users } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus } from 'lucide-react'
 import { useStore, ROLES, BRICKS, uid } from '../store.jsx'
 import { Modal, Field, Confirm, Empty } from '../ui.jsx'
+
+// ---- Accès aux environnements (administrateurs) : ajouter n'importe quel utilisateur à n'importe quel environnement
+function EnvAccess({ store }) {
+  const envs = store.db.environments
+  const accounts = store.db.accounts
+  const toggle = (env, accId, on) => {
+    const members = new Set(env.members || [])
+    on ? members.add(accId) : members.delete(accId)
+    store.updateEnv(env.id, { members: [...members] })
+  }
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-1"><Globe size={17} className="text-brand" /><h3 className="font-bold">Accès aux environnements</h3></div>
+      <p className="text-xs text-muted mb-3">Cochez pour donner à un utilisateur l'accès à un environnement (il le verra dans son menu d'environnements).</p>
+      <div className="overflow-x-auto">
+        <table className="text-sm min-w-[400px]">
+          <thead>
+            <tr className="text-left text-xs text-muted uppercase">
+              <th className="py-2 pr-4">Utilisateur</th>
+              {envs.map(e => <th key={e.id} className="px-3 text-center">{e.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map(a => (
+              <tr key={a.id} className="border-t border-line">
+                <td className="py-2 pr-4 font-semibold whitespace-nowrap">{a.pseudo} <span className="text-xs text-muted font-normal">({a.email})</span></td>
+                {envs.map(e => {
+                  const isCreator = e.createdBy === a.id
+                  const isMember = isCreator || a.developer || (e.members || []).includes(a.id)
+                  return (
+                    <td key={e.id} className="px-3 text-center">
+                      <input type="checkbox" checked={isMember} disabled={isCreator || a.developer}
+                        title={isCreator ? 'Créateur de l\'environnement' : a.developer ? 'Accès développeur global' : ''}
+                        onChange={ev => toggle(e, a.id, ev.target.checked)} />
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ---- Ajout par email (managers) : invite n'importe quel mail dans l'environnement de l'équipe
+function TeamInvite({ store, actor }) {
+  const [email, setEmail] = useState('')
+  const [msg, setMsg] = useState(null)
+  const envId = store.session.envId
+  const env = store.db.environments.find(e => e.id === envId)
+  const invite = () => {
+    const mail = email.trim().toLowerCase()
+    if (!mail || !mail.includes('@')) { setMsg({ err: true, text: 'Entrez un email valide.' }); return }
+    let acc = store.db.accounts.find(a => a.email.toLowerCase() === mail)
+    let created = false
+    if (!acc) {
+      const password = Math.random().toString(36).slice(2, 8)
+      acc = store.addAccount({ email: mail, pseudo: mail.split('@')[0], password, role: 'Membre', teamOf: actor.id })
+      created = true
+    } else {
+      store.updateAccount(acc.id, { teamOf: acc.teamOf || actor.id })
+    }
+    const members = new Set(env.members || [])
+    members.add(acc.id)
+    store.updateEnv(envId, { members: [...members] })
+    setMsg(created
+      ? { err: false, text: `✅ Compte créé pour ${mail} (mot de passe provisoire : ${acc.password}) et ajouté à « ${env.name} » dans votre équipe.` }
+      : { err: false, text: `✅ ${mail} a été ajouté à « ${env.name} » dans votre équipe.` })
+    setEmail('')
+  }
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-2 mb-1"><UserPlus size={17} className="text-brand" /><h3 className="font-bold">Inviter dans mon environnement d'équipe</h3></div>
+      <p className="text-xs text-muted mb-3">Ajoutez n'importe quel email à « {env?.name} » : si le compte n'existe pas, il est créé avec un mot de passe provisoire et rejoint votre équipe.</p>
+      <div className="flex gap-2 max-w-md">
+        <input className="input" type="email" placeholder="email@entreprise.com" value={email}
+          onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && invite()} />
+        <button className="btn-primary whitespace-nowrap" onClick={invite}><UserPlus size={15} /> Inviter</button>
+      </div>
+      {msg && <p className={`text-xs font-semibold mt-2 ${msg.err ? 'text-red-500' : 'text-emerald-600'}`}>{msg.text}</p>}
+    </div>
+  )
+}
 
 // canManage(actor, target) : règles de hiérarchie des permissions
 function canManage(actor, target) {
@@ -98,6 +183,9 @@ export default function Admin({ mode }) {
         <h2 className="text-xl font-extrabold">{mode === 'teams' ? 'Gérez mes équipes' : 'Gestion Administration'}</h2>
         <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Créer un utilisateur</button>
       </div>
+
+      {mode === 'admin' && <EnvAccess store={store} />}
+      {mode === 'teams' && <TeamInvite store={store} actor={actor} />}
 
       <div className="card p-4">
         <div className="flex items-center gap-2 mb-3"><Users size={18} className="text-brand" /><h3 className="font-bold">Gestion des utilisateurs</h3></div>
