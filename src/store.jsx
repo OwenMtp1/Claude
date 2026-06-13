@@ -63,6 +63,28 @@ function makeProjectFromEnv(env) {
   }
 }
 
+// Une demande du formulaire de contact n'est ingérée qu'une seule fois (jamais ré-ingérée même
+// si elle a été supprimée ensuite — corrige la « résurrection » au rafraîchissement).
+function shouldIngestRequest(d, item) {
+  if (!item || !item.id) return false
+  if ((d.supportRequests || []).some(r => r.id === item.id)) return false
+  if ((d._ingestedRequestIds || []).includes(item.id)) return false
+  return true
+}
+function ingestRequest(d, item) {
+  d.supportRequests = d.supportRequests || []
+  d._ingestedRequestIds = d._ingestedRequestIds || []
+  d._autoSeed = d._autoSeed || { envClients: [], envProjects: [], reqProjects: [] }
+  d.projects = d.projects || []
+  d.supportRequests.unshift({
+    id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
+    lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(), status: 'new', archived: false,
+  })
+  d._ingestedRequestIds.push(item.id)
+  // Projet d'implémentation auto, marqué comme déjà créé (ne réapparaît pas s'il est supprimé)
+  if (!d._autoSeed.reqProjects.includes(item.id)) { d.projects.unshift(makeProjectFromRequest(item)); d._autoSeed.reqProjects.push(item.id) }
+}
+
 // ---------------------------------------------------------------- SHA-256 (synchrone, compact)
 // Les mots de passe sont stockés hashés ("sha256:<hex>"), jamais en clair.
 export function sha256(ascii) {
@@ -430,14 +452,24 @@ function enrichClientFromTicket(d, ticket) {
     client = {
       id: uid(), key, name: ticket.clientName || ticket.userName,
       envId: ticket.envId || null, accountId: ticket.userAccountId || null,
-      status: 'demandes', createdAt: now, lastActivity: now, note: '',
+      status: 'attente', createdAt: now, lastActivity: now, note: '',
     }
     d.clients.unshift(client)
   } else {
     client.lastActivity = now
-    if (client.status === 'anciens') client.status = 'demandes' // un ancien client qui revient repasse en demande
   }
   return client
+}
+
+// Aligne le statut du client sur ses tickets : en attente de support s'il a un ticket
+// ouvert, sinon il repasse en clients actifs (déclenché à l'ouverture/clôture d'un ticket).
+function syncClientStatusFromTickets(d, ticket) {
+  if (!ticket) return
+  const client = (d.clients || []).find(c => c.envId ? c.envId === ticket.envId : c.accountId === ticket.userAccountId)
+  if (!client) return
+  const related = (d.tickets || []).filter(t => client.envId ? t.envId === client.envId : t.userAccountId === client.accountId)
+  const hasOpen = related.some(t => t.status !== 'closed')
+  client.status = hasOpen ? 'attente' : 'actifs'
 }
 
 function buildSeedDb() {
@@ -647,16 +679,33 @@ function migrate(db) {
   db.tickets = db.tickets || []
   db.clients = db.clients || []
   db.projects = db.projects || []
-  // Chaque demande reçue donne lieu à un projet d'implémentation (création automatique, idempotente).
-  db.supportRequests.forEach(req => {
-    if (req && req.id && !db.projects.some(p => p.sourceRequestId === req.id)) {
-      db.projects.unshift(makeProjectFromRequest(req))
+  // Suivi des éléments déjà créés automatiquement : on ne (re)crée chaque entité qu'UNE fois.
+  // Ainsi, ce que l'utilisateur supprime ne réapparaît pas au rechargement (bug de résurrection).
+  db._autoSeed = db._autoSeed || { envClients: [], envProjects: [], reqProjects: [] }
+  // Initialise l'historique des demandes déjà ingérées (demandes actuelles + supprimées) pour
+  // ne jamais les ré-ingérer depuis la boîte partagée du site.
+  const ingested = new Set(db._ingestedRequestIds || [])
+  ;(db.supportRequests || []).forEach(r => ingested.add(r.id))
+  ;(db.supportTrash || []).forEach(t => { if (t.kind === 'request' && t.data?.id) ingested.add(t.data.id) })
+  db._ingestedRequestIds = [...ingested]
+
+  // Chaque demande reçue donne lieu à UN projet d'implémentation (créé une seule fois).
+  ;(db.supportRequests || []).forEach(req => {
+    if (req && req.id && !db._autoSeed.reqProjects.includes(req.id)) {
+      if (!db.projects.some(p => p.sourceRequestId === req.id)) db.projects.unshift(makeProjectFromRequest(req))
+      db._autoSeed.reqProjects.push(req.id)
     }
   })
   // Chaque environnement existant est forcément un client (Clients actifs) avec son projet d'implémentation.
   ;(db.environments || []).forEach(env => {
-    if (!db.clients.some(c => c.key === 'env:' + env.id)) db.clients.unshift(makeClientFromEnv(env))
-    if (!db.projects.some(p => p.sourceEnvId === env.id)) db.projects.unshift(makeProjectFromEnv(env))
+    if (!db._autoSeed.envClients.includes(env.id)) {
+      if (!db.clients.some(c => c.key === 'env:' + env.id)) db.clients.unshift(makeClientFromEnv(env))
+      db._autoSeed.envClients.push(env.id)
+    }
+    if (!db._autoSeed.envProjects.includes(env.id)) {
+      if (!db.projects.some(p => p.sourceEnvId === env.id)) db.projects.unshift(makeProjectFromEnv(env))
+      db._autoSeed.envProjects.push(env.id)
+    }
   })
   // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
   const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
@@ -733,21 +782,10 @@ export function StoreProvider({ children }) {
         const inbox = JSON.parse(raw)
         if (!Array.isArray(inbox) || !inbox.length) return
         setDbState(prev => {
-          const known = new Set((prev.supportRequests || []).map(r => r.id))
-          const fresh = inbox.filter(i => i && i.id && !known.has(i.id))
+          const fresh = inbox.filter(i => shouldIngestRequest(prev, i))
           if (!fresh.length) return prev
           const next = structuredClone(prev)
-          next.supportRequests = next.supportRequests || []
-          next.projects = next.projects || []
-          fresh.forEach(item => {
-            next.supportRequests.unshift({
-              id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
-              lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
-              status: 'new', archived: false,
-            })
-            // Création automatique d'un projet d'implémentation pour chaque nouvelle demande
-            if (!next.projects.some(p => p.sourceRequestId === item.id)) next.projects.unshift(makeProjectFromRequest(item))
-          })
+          fresh.forEach(item => ingestRequest(next, item))
           return next
         })
       } catch (e) { /* inbox illisible : on ignore */ }
@@ -947,19 +985,7 @@ export function StoreProvider({ children }) {
           const inbox = JSON.parse(raw)
           if (!Array.isArray(inbox) || !inbox.length) return
           setDb(d => {
-            d.supportRequests = d.supportRequests || []
-            d.projects = d.projects || []
-            const known = new Set(d.supportRequests.map(r => r.id))
-            inbox.forEach(item => {
-              if (item && item.id && !known.has(item.id)) {
-                d.supportRequests.unshift({
-                  id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
-                  lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
-                  status: 'new', archived: false,
-                })
-                if (!d.projects.some(p => p.sourceRequestId === item.id)) d.projects.unshift(makeProjectFromRequest(item))
-              }
-            })
+            inbox.forEach(item => { if (shouldIngestRequest(d, item)) ingestRequest(d, item) })
             return d
           })
         } catch (e) { /* inbox illisible : on ignore */ }
@@ -997,7 +1023,7 @@ export function StoreProvider({ children }) {
             { id: uid(), ts: botTs, from: 'bot', authorName: 'BD Report', authorPhoto: '', text: `Bonjour ${prenom}, merci pour votre message. Un membre de l'équipe technique BD Report va très prochainement prendre en charge votre demande. Vous recevrez la réponse directement dans cette conversation.`, photo: '' },
           ],
         }
-        setDb(d => { d.tickets = d.tickets || []; d.tickets.unshift(ticket); enrichClientFromTicket(d, ticket); return d })
+        setDb(d => { d.tickets = d.tickets || []; d.tickets.unshift(ticket); enrichClientFromTicket(d, ticket); syncClientStatusFromTickets(d, ticket); return d })
         return ticket
       },
       postTicketMessage(ticketId, { text, photo, from }) {
@@ -1050,7 +1076,11 @@ export function StoreProvider({ children }) {
         })
       },
       setTicketStatus(ticketId, status) {
-        setDb(d => { const t = (d.tickets || []).find(x => x.id === ticketId); if (t) t.status = status; return d })
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (t) { t.status = status; syncClientStatusFromTickets(d, t) }
+          return d
+        })
       },
       deleteTicket(ticketId) {
         // Suppression douce : le ticket part dans la corbeille du back-office support.
@@ -1058,6 +1088,7 @@ export function StoreProvider({ children }) {
           const t = (d.tickets || []).find(x => x.id === ticketId)
           if (t) { d.supportTrash = d.supportTrash || []; d.supportTrash.unshift({ id: uid(), kind: 'ticket', deletedAt: new Date().toISOString(), data: t }) }
           d.tickets = (d.tickets || []).filter(x => x.id !== ticketId)
+          if (t) syncClientStatusFromTickets(d, t)
           return d
         })
       },

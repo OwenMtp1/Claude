@@ -102,10 +102,17 @@ async function main() {
   await type(container.querySelector('textarea'), 'Test smoke : impossible de me connecter')
   await click(find('button', 'Créer le ticket'))
   if (!text().includes('équipe technique')) throw new Error('Bot auto-message missing in ticket conversation')
+  const dbNow = () => JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  const psClient = () => dbNow().clients.find(c => c.envId === 'env-peoplespheres')
+  if (psClient()?.status !== 'attente') throw new Error('Client not set to "en attente" on ticket open: ' + psClient()?.status)
   // Les onglets support peuvent porter une pastille de messages non lus (chiffre accolé au libellé).
   const navBtn = (label) => [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
   await click(navBtn('Tickets Techniques'))
   if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in Tickets Techniques')
+  // Clôture du ticket → le client repasse en « Clients actifs »
+  await click(find('button', 'Connexion & authentification'))
+  await click(find('button', 'Clôturer'))
+  if (psClient()?.status !== 'actifs') throw new Error('Client not restored to "actifs" on ticket close: ' + psClient()?.status)
   await click(navBtn('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')
@@ -155,6 +162,9 @@ async function main() {
   raw.accounts = raw.accounts.filter(a => !String(a.id).startsWith('test-'))
   raw.subenvs = raw.subenvs.filter(s => !String(s.id).startsWith('tsub-'))
   Object.keys(raw.data).forEach(k => { if (k.startsWith('tsub-')) delete raw.data[k] })
+  // Persistance des suppressions : un projet auto-créé supprimé ne doit pas réapparaître au rechargement.
+  if (!raw.projects.some(p => p.sourceEnvId === 'env-peoplespheres')) throw new Error('Env project missing before deletion test')
+  raw.projects = raw.projects.filter(p => p.sourceEnvId !== 'env-peoplespheres')
   win.localStorage.setItem('bdrflow_db_v1', JSON.stringify(raw))
   win.sessionStorage.clear()
   const c2 = win.document.createElement('div')
@@ -170,6 +180,9 @@ async function main() {
   await click([...c2.querySelectorAll('button')].find(b => b.textContent.includes('Se connecter')))
   await act(async () => { await new Promise(r => setTimeout(r, 2800)) })
   if (!c2.textContent.includes('Test')) throw new Error('Migration failed: env Test not injected into legacy storage')
+  // La suppression du projet auto-créé a bien persisté (migrate ne l'a pas ressuscité).
+  const afterReload = JSON.parse(win.localStorage.getItem('bdrflow_db_v1'))
+  if (afterReload.projects.some(p => p.sourceEnvId === 'env-peoplespheres')) throw new Error('Deleted auto-project resurrected after reload')
 
   const realErrors = errors.filter(e => !e.includes('act(') && !e.includes('width(0) and height(0)') && !e.includes('Not implemented') && !e.includes('test-utils'))
   if (realErrors.length) throw new Error('Console errors:\n' + realErrors.join('\n---\n'))
