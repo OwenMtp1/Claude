@@ -3,20 +3,26 @@ import { Plus, Pin, PinOff, Archive, CalendarPlus, FileDown, Trash2, FolderPlus,
 import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
 import { Modal, Field, Select, Empty, Confirm, toast } from '../ui.jsx'
 
+const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 function exportNote(note, format) {
-  const html = `<html><head><meta charset="utf-8"><title>${note.title}</title></head>
-  <body><h1>${note.title}</h1><p><i>${fmtDate(note.createdAt)}</i></p>
-  <div>${(note.content || '').replace(/\n/g, '<br/>')}</div></body></html>`
+  const body = `<h1>${esc(note.title)}</h1><p><i>${fmtDate(note.createdAt)}</i></p><div>${esc(note.content).replace(/\n/g, '<br/>')}</div>`
   if (format === 'docx') {
-    const blob = new Blob(['﻿' + html], { type: 'application/msword' })
+    // En-tête Office : Word ouvre proprement ce document Word-HTML (extension .doc).
+    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head><meta charset="utf-8"><title>${esc(note.title)}</title>
+<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]-->
+<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt}h1{font-size:18pt}</style></head>
+<body>${body}</body></html>`
+    const blob = new Blob(['﻿' + doc], { type: 'application/msword' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
-    a.download = `${note.title || 'note'}.doc`
+    a.download = `${(note.title || 'note').replace(/[^\w\-]+/g, '_')}.doc`
     a.click()
     URL.revokeObjectURL(a.href)
   } else {
     const w = window.open('', '_blank')
-    w.document.write(html)
+    if (!w) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '⚠️ Fenêtre bloquée : autorisez les pop-ups pour exporter en PDF.' })); return }
+    w.document.write(`<html><head><meta charset="utf-8"><title>${esc(note.title)}</title></head><body>${body}</body></html>`)
     w.document.close()
     w.print()
   }

@@ -4,8 +4,9 @@ import {
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
   ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell,
 } from 'lucide-react'
-import { useStore, APP_VERSION } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
+import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
 import { Modal, Field, Toasts } from './ui.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -30,6 +31,7 @@ import Chatbot from './Chatbot.jsx'
 // ---------------------------------------------------------------- Connexion
 function Login() {
   const store = useStore()
+  const { t, lang } = useT()
   const [mode, setMode] = useState('login')
   const [id, setId] = useState('')
   const [pw, setPw] = useState('')
@@ -40,10 +42,10 @@ function Login() {
     setErr('')
     if (mode === 'login') {
       const acc = store.login(id.trim(), pw)
-      if (!acc) setErr('Identifiants incorrects (mail ou pseudo + mot de passe).')
+      if (!acc) setErr(t('login.errBad'))
     } else {
-      if (!id.includes('@')) { setErr('Entrez un email valide pour créer un compte.'); return }
-      if (!pw) { setErr('Choisissez un mot de passe.'); return }
+      if (!id.includes('@')) { setErr(t('login.errEmail')); return }
+      if (!pw) { setErr(t('login.errPw')); return }
       const r = store.register({ email: id.trim(), pseudo: pseudo.trim(), password: pw })
       if (r.error) setErr(r.error)
     }
@@ -53,28 +55,34 @@ function Login() {
     <div className="min-h-screen flex items-center justify-center p-4"
       style={{ background: 'linear-gradient(135deg, #1e2a52 0%, #3b5bdb 55%, #0ea5e9 100%)' }}>
       <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md fade-in">
+        <div className="flex justify-end -mt-2 -mr-2 mb-1 gap-1">
+          {LANGS.map(l => (
+            <button key={l.id} title={l.label} onClick={() => store.setUiLang(l.id)}
+              className={`text-base px-1.5 py-1 rounded-lg ${l.id === lang ? 'bg-gray-100' : 'opacity-50 hover:opacity-100'}`}>{l.flag}</button>
+          ))}
+        </div>
         <div className="text-center mb-6">
           <div className="mx-auto mb-3 w-fit"><LogoMark size={56} /></div>
           <h1 className="text-2xl font-extrabold tracking-tight"><span className="text-[#3B5BDB]">BD</span><span className="text-gray-900"> Report</span></h1>
-          <p className="text-sm text-gray-500">Votre espace sales tout-en-un</p>
+          <p className="text-sm text-gray-500">{t('login.tagline')}</p>
         </div>
         <div className="space-y-3">
           <button className="w-full btn border border-gray-200 justify-center text-gray-700 hover:bg-gray-50"
-            onClick={() => setErr("La connexion Google nécessite un déploiement avec OAuth configuré — utilisez l'email + mot de passe en attendant.")}>
+            onClick={() => setErr(t('login.googleSoon'))}>
             <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 33.4 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 5.8 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20c11 0 19.5-8 19.5-20 0-1.3-.1-2.7-.9-4z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3 0 5.8 1.1 7.9 3l5.7-5.7C34 5.8 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-1.7 13.5-4.7l-6.2-5.3C29.2 35.3 26.7 36 24 36c-5.3 0-9.7-2.6-11.3-7l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20H24v8h11.3c-.8 2.3-2.3 4.3-4.1 5.9l6.2 5.3C41.4 35.8 44 30.5 44 24c0-1.3-.1-2.7-.4-4z"/></svg>
-            Continuer avec Google
+            {t('login.google')}
           </button>
-          <div className="flex items-center gap-3 text-xs text-gray-400"><div className="flex-1 h-px bg-gray-200" />ou<div className="flex-1 h-px bg-gray-200" /></div>
-          <input className="input !bg-gray-50" placeholder={mode === 'login' ? 'Mail ou pseudo' : 'Email'} value={id} onChange={e => setId(e.target.value)} />
-          {mode === 'register' && <input className="input !bg-gray-50" placeholder="Pseudo" value={pseudo} onChange={e => setPseudo(e.target.value)} />}
-          <input className="input !bg-gray-50" type="password" placeholder="Mot de passe" value={pw} onChange={e => setPw(e.target.value)}
+          <div className="flex items-center gap-3 text-xs text-gray-400"><div className="flex-1 h-px bg-gray-200" />{t('login.or')}<div className="flex-1 h-px bg-gray-200" /></div>
+          <input className="input !bg-gray-50" placeholder={mode === 'login' ? t('login.idph') : t('login.emailph')} value={id} onChange={e => setId(e.target.value)} />
+          {mode === 'register' && <input className="input !bg-gray-50" placeholder={t('login.userph')} value={pseudo} onChange={e => setPseudo(e.target.value)} />}
+          <input className="input !bg-gray-50" type="password" placeholder={t('login.pwph')} value={pw} onChange={e => setPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submit()} />
           {err && <p className="text-red-500 text-xs">{err}</p>}
           <button className="w-full btn-primary justify-center !py-2.5" onClick={submit}>
-            {mode === 'login' ? 'Se connecter' : 'Créer mon compte'}
+            {mode === 'login' ? t('login.signin') : t('login.signup')}
           </button>
           <button className="w-full text-xs text-gray-500 hover:underline" onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setErr('') }}>
-            {mode === 'login' ? "Pas de compte ? Créer un compte" : 'Déjà un compte ? Se connecter'}
+            {mode === 'login' ? t('login.toSignup') : t('login.toSignin')}
           </button>
           <p className="text-center text-[10px] text-gray-400">version {APP_VERSION}</p>
         </div>
@@ -85,6 +93,7 @@ function Login() {
 
 // ---------------------------------------------------------------- Bienvenue
 function Welcome({ name, onDone }) {
+  const { t } = useT()
   const [showHint, setShowHint] = useState(false)
   useEffect(() => {
     const t1 = setTimeout(() => setShowHint(true), 2000)
@@ -92,17 +101,18 @@ function Welcome({ name, onDone }) {
     return () => { clearTimeout(t1); clearTimeout(t2) }
   }, [onDone])
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-6">
-      <h1 className="reveal-text text-2xl sm:text-4xl font-extrabold text-gray-900 px-4">
-        Bienvenue {name} dans votre Espace BDR
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-6 px-6 text-center">
+      <h1 className="welcome-reveal text-2xl sm:text-4xl font-extrabold text-gray-900 max-w-2xl leading-snug">
+        {t('welcome.hello')} {name} {t('welcome.inSpace')}
       </h1>
-      {showHint && <p className="text-sm text-gray-400 fade-in">Chargement de vos environnements...</p>}
+      {showHint && <p className="text-sm text-gray-400 fade-in">{t('welcome.loading')}</p>}
     </div>
   )
 }
 
 // ---------------------------------------------------------------- Environnements
 function PinGate({ title, expected, onOk, onBack }) {
+  const { t } = useT()
   const [pin, setPin] = useState('')
   const [err, setErr] = useState(false)
   useEffect(() => {
@@ -115,18 +125,19 @@ function PinGate({ title, expected, onOk, onBack }) {
     <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-surface">
       <Lock size={32} className="text-brand" />
       <h2 className="font-extrabold text-lg">{title}</h2>
-      <p className="text-sm text-muted">Entrez le code d'accès à 4 chiffres</p>
+      <p className="text-sm text-muted">{t('env.pinTitle')}</p>
       <input autoFocus type="password" inputMode="numeric" maxLength={4}
         className="input !w-40 text-center text-2xl tracking-[0.5em] font-extrabold"
         value={pin} onChange={e => { setErr(false); setPin(e.target.value.replace(/\D/g, '')) }} />
-      {err && <p className="text-red-500 text-sm">Code incorrect.</p>}
-      <button className="btn-ghost text-xs" onClick={onBack}><ArrowLeft size={13} /> Retour</button>
+      {err && <p className="text-red-500 text-sm">{t('env.pinWrong')}</p>}
+      <button className="btn-ghost text-xs" onClick={onBack}><ArrowLeft size={13} /> {t('env.back')}</button>
     </div>
   )
 }
 
 function EnvPicker() {
   const store = useStore()
+  const { t } = useT()
   const me = store.account
   const [creating, setCreating] = useState(false)
   const [form, setForm] = useState({ name: '', logo: '' })
@@ -148,8 +159,8 @@ function EnvPicker() {
   return (
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 gap-8">
       <div className="text-center">
-        <h2 className="text-2xl font-extrabold">Choisissez un environnement</h2>
-        {me.developer && <p className="text-xs text-muted mt-1 flex items-center gap-1 justify-center"><Code2 size={13} /> Portail Développeur — accès à tous les environnements</p>}
+        <h2 className="text-2xl font-extrabold">{t('env.choose')}</h2>
+        {me.developer && <p className="text-xs text-muted mt-1 flex items-center gap-1 justify-center"><Code2 size={13} /> {t('env.devPortal')}</p>}
       </div>
       <div className="flex flex-wrap justify-center gap-4">
         {envs.map(env => (
@@ -162,12 +173,12 @@ function EnvPicker() {
           </button>
         ))}
         <button className="card w-44 h-44 flex flex-col items-center justify-center gap-2 border-dashed hover:scale-105 transition text-muted" onClick={() => setCreating(true)}>
-          <Plus size={28} /> <span className="text-sm font-semibold">Créer un environnement</span>
+          <Plus size={28} /> <span className="text-sm font-semibold">{t('env.create')}</span>
         </button>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-xs text-muted">Connecté : {me.pseudo} ({me.email})</span>
-        <button className="btn-ghost !py-1 text-xs" onClick={store.logout}><LogOut size={13} /> Déconnexion</button>
+        <span className="text-xs text-muted">{t('env.connectedAs')} : {me.pseudo} ({me.email})</span>
+        <button className="btn-ghost !py-1 text-xs" onClick={store.logout}><LogOut size={13} /> {t('common.logout')}</button>
       </div>
       {creating && (
         <Modal title="Créer un environnement" onClose={() => setCreating(false)}>
@@ -203,6 +214,7 @@ function EnvPicker() {
 
 function SubEnvPicker() {
   const store = useStore()
+  const { t } = useT()
   const session = store.session
   const env = store.db.environments.find(e => e.id === session.envId)
   const subs = store.db.subenvs.filter(s => s.envId === session.envId)
@@ -216,7 +228,7 @@ function SubEnvPicker() {
     <div className="min-h-screen bg-surface flex flex-col items-center justify-center p-6 gap-8">
       <div className="text-center">
         {env?.logo && <img src={env.logo} alt="" className="w-14 h-14 rounded-2xl object-cover mx-auto mb-2" />}
-        <h2 className="text-2xl font-extrabold">{env?.name} — Choisissez votre espace</h2>
+        <h2 className="text-2xl font-extrabold">{env?.name} — {t('env.chooseSpace')}</h2>
       </div>
       <div className="flex flex-wrap justify-center gap-4">
         {subs.map(s => (
@@ -231,10 +243,10 @@ function SubEnvPicker() {
           </button>
         ))}
         <button className="card w-44 h-44 flex flex-col items-center justify-center gap-2 border-dashed hover:scale-105 transition text-muted" onClick={() => setCreating(true)}>
-          <Plus size={28} /> <span className="text-sm font-semibold">Nouvel espace</span>
+          <Plus size={28} /> <span className="text-sm font-semibold">{t('env.newSpace')}</span>
         </button>
       </div>
-      <button className="btn-ghost text-xs" onClick={() => store.setSession(s => ({ ...s, envId: null }))}><ArrowLeft size={13} /> Changer d'environnement</button>
+      <button className="btn-ghost text-xs" onClick={() => store.setSession(s => ({ ...s, envId: null }))}><ArrowLeft size={13} /> {t('env.changeEnv')}</button>
       {creating && (
         <Modal title="Créer votre espace collaborateur" onClose={() => setCreating(false)}>
           <div className="grid grid-cols-2 gap-3">
@@ -297,7 +309,7 @@ const NAV_GROUPS = [
   },
   {
     id: 'administration', label: 'Administration', items: [
-      { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Administrateur'] },
+      { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Administrateur', 'Développeur'] },
       { id: 'teams', label: 'Gérez mes équipes', icon: Users, roles: ['Manager'] },
     ],
   },
@@ -310,11 +322,13 @@ function MainApp() {
   const session = store.session
   const sub = store.db.subenvs.find(s => s.id === session.subEnvId)
   const env = store.db.environments.find(e => e.id === session.envId)
+  const { t: tr } = useT()
   const [page, setPage] = useState('dashboard')
   const [pendingNote, setPendingNote] = useState('')
   const [theme, setTheme] = useState(() => store.sub?.theme || 'ocean-pro')
 
   useEffect(() => { applyTheme(store.sub?.theme || 'ocean-pro') }, [session.subEnvId])
+  useEffect(() => { setCurrentCurrency(store.sub?.currency || 'EUR') }, [session.subEnvId, store.sub?.currency])
 
   const themeObj = THEMES.find(t => t.id === (store.sub?.theme || theme)) || THEMES[0]
 
@@ -349,7 +363,17 @@ function MainApp() {
     teams: <Admin mode="teams" />,
     settings: <Settings onEditWidgets={() => setPage('dashboard')} currentTheme={store.sub?.theme || 'ocean-pro'}
       onThemeSaved={(t) => { store.setSub(d => ({ ...d, theme: t })); setTheme(t) }} />,
-    org: <OrgChart onOpenProfile={(s) => { store.enterSubEnv(s.id); setPage('dashboard') }} />,
+    org: <OrgChart onOpenProfile={(s) => {
+      // Respecte le code PIN (micro 16) : accès direct seulement si on gère la personne
+      // ou si on est principal/dev/admin/fondateur ; sinon on passe par la saisie du code.
+      const env = store.db.environments.find(e => e.id === session.envId)
+      const owner = store.db.accounts.find(a => a.id === s.ownerId)
+      const elevated = ['Fondateur', 'Administrateur', 'Développeur'].includes(me.role) || env?.createdBy === me.id
+      const manages = me.role === 'Manager' && owner?.teamOf === me.id
+      const own = s.ownerId === me.id
+      if (elevated || manages || own || !s.pin) { store.enterSubEnv(s.id); setPage('dashboard') }
+      else { store.setSession(sx => ({ ...sx, subEnvId: null })) } // renvoie au sélecteur d'espace (avec PIN)
+    }} />,
   }[page] || <Dashboard />
 
   return (
@@ -362,7 +386,7 @@ function MainApp() {
       ))}
       {/* Sidebar (off-canvas sur mobile, fixe sur desktop) */}
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-      <aside className={`w-56 shrink-0 bg-card/95 backdrop-blur border-r border-line flex flex-col
+      <aside className={`w-60 shrink-0 bg-card/95 backdrop-blur border-r border-line flex flex-col
         fixed inset-y-0 left-0 z-40 transition-transform lg:static lg:translate-x-0 lg:z-10
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="px-3.5 py-3 border-b border-line space-y-2">
@@ -370,7 +394,7 @@ function MainApp() {
           <div className="flex items-center gap-2 min-w-0">
             {env?.logo && <img src={env.logo} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />}
             <div className="min-w-0">
-              <div className="font-bold text-[12px] leading-tight truncate">Espace Sales de {me.pseudo}</div>
+              <div className="font-bold text-[12px] leading-tight truncate" title={`Espace Sales de ${me.pseudo}`}>Espace Sales de {me.pseudo}</div>
               <div className="text-[11px] text-muted truncate">{env?.name} · {sub?.prenom} {sub?.nom}</div>
             </div>
           </div>
@@ -383,18 +407,21 @@ function MainApp() {
               <div key={g.id} className="mb-1">
                 <button onClick={() => setClosedGroups(c => ({ ...c, [g.id]: !c[g.id] }))}
                   className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-[10px] font-extrabold uppercase tracking-wider ${hasActive ? 'text-brand' : 'text-muted'} hover:bg-surface`}>
-                  {g.label}
+                  {tr(`nav.${g.id}`, g.label)}
                   {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
                 {(open || hasActive) && (
                   <div className="space-y-0.5 mt-0.5">
-                    {g.items.map(item => (
-                      <button key={item.id} onClick={() => goto(item.id)}
-                        className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
-                        <item.icon size={15} className={page === item.id ? '' : 'text-muted'} />
-                        <span className="truncate">{item.label}</span>
-                      </button>
-                    ))}
+                    {g.items.map(item => {
+                      const label = tr(`page.${item.id}`, item.label)
+                      return (
+                        <button key={item.id} onClick={() => goto(item.id)} title={label}
+                          className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
+                          <item.icon size={15} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
+                          <span className="truncate">{label}</span>
+                        </button>
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -404,11 +431,11 @@ function MainApp() {
         <div className="px-2 py-2 border-t border-line space-y-0.5">
           <button className="w-full flex items-center gap-2 px-3 py-[7px] rounded-lg text-[13px] font-semibold text-muted hover:bg-surface"
             onClick={() => store.setSession(s => ({ ...s, subEnvId: null }))}>
-            <ArrowLeft size={15} /> Changer d'espace
+            <ArrowLeft size={15} /> {tr('common.changeSpace')}
           </button>
           <button className="w-full flex items-center gap-2 px-3 py-[7px] rounded-lg text-[13px] font-semibold text-red-500 hover:bg-red-50"
             onClick={store.logout}>
-            <LogOut size={15} /> Déconnexion
+            <LogOut size={15} /> {tr('common.logout')}
           </button>
           <p className="text-center text-[10px] text-muted pt-1">v{APP_VERSION}</p>
         </div>
@@ -421,13 +448,15 @@ function MainApp() {
             <button className="p-2 rounded-xl hover:bg-surface lg:hidden" title="Menu" onClick={() => setSidebarOpen(o => !o)}>
               {sidebarOpen ? <X size={19} /> : <Menu size={19} />}
             </button>
-            <span className="font-bold text-sm text-muted truncate">{NAV.find(n => n.id === page)?.label || (page === 'settings' ? 'Paramètres' : page === 'org' ? 'Organigramme' : '')}</span>
+            {/* Titre affiché uniquement sur mobile (les pages ont déjà leur titre — micro 3) */}
+            <span className="font-bold text-sm text-muted truncate lg:hidden">{tr(`page.${page}`, NAV.find(n => n.id === page)?.label || (page === 'settings' ? 'Paramètres' : page === 'org' ? 'Organigramme' : ''))}</span>
           </div>
           <div className="flex items-center gap-1.5">
             <button title="Recherche (Ctrl+K)" className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-line text-muted text-xs hover:bg-surface"
               onClick={() => window.dispatchEvent(new CustomEvent('open-global-search'))}>
-              <Search size={14} /> <span className="hidden sm:inline">Rechercher</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
+              <Search size={14} /> <span className="hidden sm:inline">{tr('common.search')}</span> <kbd className="hidden sm:inline text-[10px] border border-line rounded px-1">⌘K</kbd>
             </button>
+            <LangPicker />
             <MentionsBell />
             <button title="Organigramme" className={`p-2 rounded-xl hover:bg-surface ${page === 'org' ? 'text-brand' : 'text-muted'}`} onClick={() => setPage('org')}>
               <Network size={19} />
@@ -440,7 +469,7 @@ function MainApp() {
               : <div className="w-8 h-8 rounded-full bg-brand/15 text-brand text-xs font-extrabold flex items-center justify-center ml-1">{me.pseudo?.slice(0, 2).toUpperCase()}</div>}
           </div>
         </header>
-        <main className="p-3 sm:p-5 max-w-[1400px] mx-auto">
+        <main className="p-3 sm:p-5 pb-24 max-w-[1400px] mx-auto">
           {booting ? <PageSkeleton /> : pageEl}
         </main>
       </div>
@@ -448,6 +477,32 @@ function MainApp() {
       <GlobalSearch onNavigate={goto} />
       <Chatbot />
       <Toasts />
+    </div>
+  )
+}
+
+// Sélecteur de langue (drapeau) — interface FR / EN / ES
+function LangPicker() {
+  const store = useStore()
+  const { lang } = useT()
+  const [open, setOpen] = useState(false)
+  const cur = LANGS.find(l => l.id === lang) || LANGS[0]
+  return (
+    <div className="relative">
+      <button title="Langue / Language / Idioma" className="p-2 rounded-xl hover:bg-surface text-base leading-none" onClick={() => setOpen(o => !o)}>{cur.flag}</button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-11 z-40 card shadow-xl p-1 w-40 fade-in">
+            {LANGS.map(l => (
+              <button key={l.id} onClick={() => { store.setUiLang(l.id); setOpen(false) }}
+                className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm hover:bg-surface ${l.id === lang ? 'text-brand font-bold' : ''}`}>
+                <span className="text-base">{l.flag}</span> {l.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
     </div>
   )
 }
@@ -519,7 +574,10 @@ export default function App() {
 
   if (!session || !store.account) return <Login />
   if (!session.welcomed) {
-    return <Welcome name={store.account.pseudo} onDone={() => store.setSession(s => ({ ...s, welcomed: true }))} />
+    // Affiche le prénom si un espace de ce compte existe, sinon le pseudo (micro 2)
+    const ownSub = store.db.subenvs.find(s => s.ownerId === store.account.id)
+    const displayName = ownSub?.prenom || store.account.pseudo
+    return <Welcome name={displayName} onDone={() => store.setSession(s => ({ ...s, welcomed: true }))} />
   }
   if (!session.envId) return <EnvPicker />
   if (!session.subEnvId) return <SubEnvPicker />

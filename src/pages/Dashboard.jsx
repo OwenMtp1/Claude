@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Trophy, Pencil, EyeOff, Eye, MonitorPlay } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, fmtDate, monthKey, startOfWeek, parseISO } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, fmtDate, fmtMoney, monthKey, startOfWeek, parseISO } from '../store.jsx'
 import { StatBubble, TimelinePicker, Gauge, Modal, Empty, Select } from '../ui.jsx'
 
 const DEFAULT_WIDGETS = [
@@ -20,12 +20,16 @@ const DEFAULT_WIDGETS = [
 
 // ---- Vélocité : temps moyen passé dans chaque phase (d'après l'historique des RDV)
 function pipelineVelocity(rdvs) {
-  const durations = {} // phase -> [jours]
+  // Temps moyen pour PASSER d'une phase à la suivante : on ne compte que les segments
+  // terminés (avec une phase suivante), on ignore la phase KO (terminale, sans signification)
+  // et on n'inclut pas le temps « en cours » qui gonflerait l'indicateur indéfiniment (micro 10).
+  const durations = {}
   rdvs.forEach(r => {
     const phases = (r.history || []).filter(h => h.type === 'phase' || ['R1', 'R2', 'MQL', 'SQL', 'Signée', 'KO'].includes(h.value))
-    for (let i = 0; i < phases.length; i++) {
+    for (let i = 0; i < phases.length - 1; i++) {
+      if (phases[i].value === 'KO') continue
       const d1 = parseISO(phases[i].date)
-      const d2 = i + 1 < phases.length ? parseISO(phases[i + 1].date) : (['KO', 'Signée'].includes(r.phase) ? null : new Date())
+      const d2 = parseISO(phases[i + 1].date)
       if (!d1 || !d2) continue
       const days = Math.max(0, Math.round((d2 - d1) / 86400000))
       ;(durations[phases[i].value] = durations[phases[i].value] || []).push(days)
@@ -95,13 +99,17 @@ function exportReportPDF(stats, modeLabel) {
     ${row('Primes', stats.cur.primes, stats.prev.primes, ' €')}
     </table></body></html>`
   const w = window.open('', '_blank')
+  if (!w) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '⚠️ Fenêtre bloquée : autorisez les pop-ups pour exporter en PDF.' })); return }
   w.document.write(html)
   w.document.close()
   w.print()
 }
 
-function buildSeries(rdvs, dateKey, timeline, custom) {
-  const filtered = rdvs.filter(r => inTimeline(r[dateKey], timeline, custom))
+function buildSeries(rdvs, dateKey, timeline, custom, pastOnly) {
+  const today = new Date().toISOString().slice(0, 10)
+  // "RDV réalisés" = uniquement les rendez-vous dont la date est passée ou aujourd'hui (bug 1)
+  const base = pastOnly ? rdvs.filter(r => r[dateKey] && r[dateKey] <= today) : rdvs
+  const filtered = base.filter(r => inTimeline(r[dateKey], timeline, custom))
   const byMonth = timeline === 'year' || timeline === 'total'
   const map = {}
   filtered.forEach(r => {
@@ -115,10 +123,10 @@ function buildSeries(rdvs, dateKey, timeline, custom) {
   return { points: Object.values(map).sort((a, b) => a.sk.localeCompare(b.sk)), total: filtered.length, list: filtered }
 }
 
-function RdvChart({ title, rdvs, dateKey, onDetails }) {
+function RdvChart({ title, rdvs, dateKey, onDetails, pastOnly }) {
   const [tl, setTl] = useState('year')
   const [custom, setCustom] = useState({})
-  const { points, total, list } = useMemo(() => buildSeries(rdvs, dateKey, tl, custom), [rdvs, dateKey, tl, custom])
+  const { points, total, list } = useMemo(() => buildSeries(rdvs, dateKey, tl, custom, pastOnly), [rdvs, dateKey, tl, custom, pastOnly])
   return (
     <div className="card p-4">
       <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
@@ -239,6 +247,9 @@ export default function Dashboard() {
   const primesCeMois = primes.filter(p => p.payMonthKey === curKey).reduce((a, p) => a + p.montant, 0)
   const primesMoisSuivant = primes.filter(p => p.payMonthKey === nextKey).reduce((a, p) => a + p.montant, 0)
   const primesTotal = primes.reduce((a, p) => a + p.montant, 0)
+  // Primes déclenchées sur la période sélectionnée (suit la timeline des bulles — micro 9)
+  const primesPeriode = primes.filter(p => inTimeline(p.triggerDate, bubbleTl, bubbleCustom)).reduce((a, p) => a + p.montant, 0)
+  const periodeLabel = bubbleTl === 'total' ? 'Total' : 'Période'
 
   // ---- Provenance (timeline dédiée, défaut Total)
   const provRdvs = rdvs.filter(r => inTimeline(r.dateRdv || r.datePriseRdv, provTl, provCustom))
@@ -266,7 +277,7 @@ export default function Dashboard() {
   const renderWidget = (id) => {
     switch (id) {
       case 'rdv-realises':
-        return <RdvChart title="RDV réalisés" rdvs={rdvs} dateKey="dateRdv" onDetails={showDetails} />
+        return <RdvChart title="RDV réalisés" rdvs={rdvs} dateKey="dateRdv" onDetails={showDetails} pastOnly />
       case 'rdv-pris':
         return <RdvChart title="RDV pris" rdvs={rdvs} dateKey="datePriseRdv" onDetails={showDetails} />
       case 'bubbles':
@@ -279,8 +290,8 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <StatBubble title="MQL générés" value={mql.length} tone="blue" onDetails={() => showDetails(mql, 'MQL — détail')} />
               <StatBubble title="SQL générés" value={sql.length} tone="red" onDetails={() => showDetails(sql, 'SQL — détail')} />
-              <StatBubble title="Primes du mois" value={`${primesCeMois} €`} tone="green" sub={`Mois suivant : ${primesMoisSuivant} €`} />
-              <StatBubble title="Revenu primes total" value={`${primesTotal} €`} tone="yellow" />
+              <StatBubble title={`Primes ${periodeLabel.toLowerCase()}`} value={fmtMoney(primesPeriode)} tone="green" sub={`Ce mois : ${fmtMoney(primesCeMois)} · suivant : ${fmtMoney(primesMoisSuivant)}`} />
+              <StatBubble title="Revenu primes total" value={fmtMoney(primesTotal)} tone="yellow" />
             </div>
           </div>
         )
@@ -367,7 +378,7 @@ export default function Dashboard() {
         const items = [
           { k: 'rdvSemaine', label: 'RDV pris cette semaine', cur: rdvSem, unit: '' },
           { k: 'sqlMois', label: 'SQL ce mois-ci', cur: sqlMois, unit: '' },
-          { k: 'primesMois', label: 'Primes ce mois-ci', cur: primesCeMois, unit: ' €' },
+          { k: 'primesMois', label: 'Primes ce mois-ci', cur: primesCeMois, unit: sub.currency === 'USD' ? ' $' : ' €' },
         ]
         return (
           <div className="card p-4">
@@ -428,7 +439,7 @@ export default function Dashboard() {
         const items = [
           ['RDV pris', stats.cur.pris, stats.prev.pris], ['RDV réalisés', stats.cur.realises, stats.prev.realises],
           ['MQL', stats.cur.mql, stats.prev.mql], ['SQL', stats.cur.sql, stats.prev.sql],
-          ['Signatures', stats.cur.signatures, stats.prev.signatures], ['Primes (€)', stats.cur.primes, stats.prev.primes],
+          ['Signatures', stats.cur.signatures, stats.prev.signatures], [`Primes (${sub.currency === 'USD' ? '$' : '€'})`, stats.cur.primes, stats.prev.primes],
         ]
         return (
           <div className="card p-4">

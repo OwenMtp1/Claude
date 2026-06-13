@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
-import { useStore, computePrimes, inTimeline, uid, SOURCES } from '../store.jsx'
+import { useStore, computePrimes, inTimeline, fmtMoney, uid, SOURCES } from '../store.jsx'
 import { TimelinePicker, Empty } from '../ui.jsx'
 
 const METRICS = [
@@ -22,7 +22,7 @@ function metricValue(data, metric, tl, custom, source) {
     case 'mql': return rdvs.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase)).length
     case 'sql': return rdvs.filter(r => ['SQL', 'Signée'].includes(r.phase)).length
     case 'sign': return rdvs.filter(r => r.phase === 'Signée').length
-    case 'primes': return computePrimes(rdvs, data.bareme).reduce((a, p) => a + p.montant, 0) + ' €'
+    case 'primes': return fmtMoney(computePrimes(rdvs, data.bareme).reduce((a, p) => a + p.montant, 0), data.currency || 'EUR')
     case 'conv': {
       const sql = rdvs.filter(r => ['SQL', 'Signée'].includes(r.phase)).length
       return rdvs.length ? Math.round((sql / rdvs.length) * 100) + '%' : '—'

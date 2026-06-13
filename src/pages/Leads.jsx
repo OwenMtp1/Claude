@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Clock, Building2, Users, UserRound, MessageSquare } from 'lucide-react'
-import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, companyKey } from '../store.jsx'
+import { useStore, parseISO, fmtDate, applyRdvAutomations, OPP_COLORS, PHASE_COLORS, phaseColor, oppColor, companyKey } from '../store.jsx'
 import { Modal, Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
@@ -137,7 +137,7 @@ export default function Leads() {
             <div key={opp} data-opp={opp} className="kanban-col flex-1 rounded-2xl bg-surface/80 border border-line p-2.5"
               onDragOver={e => e.preventDefault()} onDrop={() => drop(opp)}>
               <div className="flex items-center justify-between px-1 mb-2">
-                <span className={`chip ${OPP_COLORS[opp] || 'bg-card text-ink'}`}>{opp}</span>
+                <span className={`chip ${oppColor(opp)}`}>{opp}</span>
                 <span className="text-xs font-bold text-muted">{cards.length}</span>
               </div>
               <div className="space-y-2 min-h-[6rem]">
@@ -151,7 +151,7 @@ export default function Leads() {
                       <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
                         onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        <span className={`chip ${PHASE_COLORS[g.rep.phase] || 'bg-surface text-ink'}`}>{g.rep.phase}</span>
+                        <span className={`chip ${phaseColor(g.rep.phase)}`}>{g.rep.phase}</span>
                         {g.rdvs.length > 1 && <span className="chip bg-surface text-muted">{g.rdvs.length} RDV</span>}
                         {scope === 'org' && g.rep._owner && <span className="chip bg-brand/10 text-brand">{g.rep._owner}</span>}
                         {nbComments > 0 && <span className="chip bg-amber-100 text-amber-700 flex items-center gap-0.5"><MessageSquare size={10} /> {nbComments}</span>}

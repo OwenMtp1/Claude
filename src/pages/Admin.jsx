@@ -91,15 +91,19 @@ function TeamInvite({ store, actor }) {
 // canManage(actor, target) : règles de hiérarchie des permissions
 function canManage(actor, target) {
   if (actor.role === 'Fondateur') return true
+  // Le rôle Développeur peut modifier mots de passe et informations de tout le monde (sauf Fondateur).
+  if (actor.role === 'Développeur') return target.role !== 'Fondateur'
   if (actor.role === 'Administrateur') return target.role !== 'Fondateur'
-  if (actor.role === 'Manager') return target.teamOf === actor.id && !['Fondateur', 'Administrateur'].includes(target.role)
+  if (actor.role === 'Manager') return target.teamOf === actor.id && !['Fondateur', 'Administrateur', 'Développeur'].includes(target.role)
   return false
 }
 
 function rolesAssignable(actor) {
   if (actor.role === 'Fondateur') return ROLES
+  if (actor.role === 'Développeur') return ROLES.filter(r => r !== 'Fondateur')
   if (actor.role === 'Administrateur') return ROLES.filter(r => r !== 'Fondateur')
-  if (actor.role === 'Manager') return ['Membre']
+  // Un manager de l'environnement peut accorder le rôle Développeur (en plus de Membre).
+  if (actor.role === 'Manager') return ['Membre', 'Développeur']
   return []
 }
 

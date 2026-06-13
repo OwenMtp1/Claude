@@ -18,12 +18,33 @@ function toCSV(contacts) {
   return [head, ...rows].join('\n')
 }
 
+// Parseur CSV robuste : gère les guillemets, virgules/points-virgules internes,
+// guillemets échappés ("") et sauts de ligne dans les champs entre guillemets (bug 8).
+function parseCSVRows(text, sep) {
+  const rows = []
+  let row = [], field = '', inQuotes = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++ }
+        else inQuotes = false
+      } else field += ch
+    } else if (ch === '"') inQuotes = true
+    else if (ch === sep) { row.push(field); field = '' }
+    else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = '' }
+    else if (ch === '\r') { /* ignoré */ }
+    else field += ch
+  }
+  if (field.length || row.length) { row.push(field); rows.push(row) }
+  return rows.filter(r => r.some(c => c.trim()))
+}
 function parseCSV(text) {
-  const lines = text.split(/\r?\n/).filter(l => l.trim())
-  if (!lines.length) return []
-  const sep = lines[0].includes(';') ? ';' : ','
-  const split = (l) => l.match(new RegExp(`(".*?"|[^"${sep}]+)(?=\\s*${sep}|\\s*$)`, 'g'))?.map(s => s.replace(/^"|"$/g, '').replace(/""/g, '"')) || []
-  const head = split(lines[0]).map(h => h.toLowerCase())
+  const firstLine = text.split(/\r?\n/)[0] || ''
+  const sep = (firstLine.split(';').length > firstLine.split(',').length) ? ';' : ','
+  const rows = parseCSVRows(text, sep)
+  if (!rows.length) return []
+  const head = rows[0].map(h => h.trim().toLowerCase())
   const idx = (names) => head.findIndex(h => names.some(n => h.includes(n)))
   const map = {
     nom: idx(['nom', 'name', 'contact']), poste: idx(['poste', 'title', 'job']),
@@ -31,10 +52,9 @@ function parseCSV(text) {
     tel: idx(['tel', 'phone', 'téléphone']), secteur: idx(['secteur', 'industry']),
     linkedin: idx(['linkedin']), source: idx(['source']),
   }
-  return lines.slice(1).map(l => {
-    const cells = split(l)
+  return rows.slice(1).map(cells => {
     const c = { id: uid(), createdAt: todayISO() }
-    Object.entries(map).forEach(([k, i]) => { c[k] = i >= 0 ? (cells[i] || '') : '' })
+    Object.entries(map).forEach(([k, i]) => { c[k] = i >= 0 ? (cells[i] || '').trim() : '' })
     return c
   }).filter(c => c.nom || c.email)
 }
@@ -92,9 +112,23 @@ export default function Contacts() {
   const importCSV = (file) => {
     const reader = new FileReader()
     reader.onload = () => {
-      const added = parseCSV(String(reader.result))
-      store.setSub(d => ({ ...d, contacts: [...d.contacts, ...added] }))
-      store.logAction('Contact', 'Import CSV', `${added.length} contact(s) depuis ${file.name}`)
+      const parsed = parseCSV(String(reader.result))
+      // Déduplication à l'import : on met à jour la fiche existante (email/nom) au lieu de dupliquer.
+      let added = 0, updated = 0
+      store.setSub(d => {
+        parsed.forEach(p => {
+          const email = (p.email || '').toLowerCase()
+          const nom = (p.nom || '').toLowerCase()
+          const found = d.contacts.find(x =>
+            (email && (x.email || '').toLowerCase() === email) ||
+            (!email && nom && (x.nom || '').toLowerCase() === nom))
+          if (found) { Object.keys(p).forEach(k => { if (k !== 'id' && p[k]) found[k] = p[k] }); updated++ }
+          else { d.contacts.push(p); added++ }
+        })
+        return d
+      })
+      store.logAction('Contact', 'Import CSV', `${added} ajouté(s), ${updated} mis à jour depuis ${file.name}`)
+      toast(`Import : ${added} ajouté(s), ${updated} mis à jour`)
     }
     reader.readAsText(file)
   }
