@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -25,6 +25,9 @@ import AiDashboard from './pages/AiDashboard.jsx'
 import Logs from './pages/Logs.jsx'
 import Trash from './pages/Trash.jsx'
 import TeamLead from './pages/TeamLead.jsx'
+import Support from './pages/Support.jsx'
+import Requests from './pages/Requests.jsx'
+import Tickets from './pages/Tickets.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -284,8 +287,8 @@ const NAV_GROUPS = [
     id: 'pilotage', label: 'Pilotage', items: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
       { id: 'ai', label: 'Dashboard personnalisé', icon: Sparkles, brick: 'Dashboard personnalisé' },
-      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur'] },
-      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur'] },
+      { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
+      { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
     ],
   },
   {
@@ -310,8 +313,19 @@ const NAV_GROUPS = [
     ],
   },
   {
+    id: 'aide', label: 'Aide', items: [
+      { id: 'support', label: 'Support', icon: LifeBuoy },
+    ],
+  },
+  {
+    id: 'supportbdr', label: 'Support Client BD Report', items: [
+      { id: 'requests', label: 'Nouvelles demandes', icon: Inbox, roles: SUPPORT_ROLES },
+      { id: 'tickets', label: 'Tickets Techniques', icon: LifeBuoy, roles: SUPPORT_ROLES },
+    ],
+  },
+  {
     id: 'administration', label: 'Administration', items: [
-      { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Administrateur', 'Développeur'] },
+      { id: 'admin', label: 'Gestion Administration', icon: Shield, roles: ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'] },
       { id: 'teams', label: 'Gérez mes équipes', icon: Users, roles: ['Manager'] },
     ],
   },
@@ -361,6 +375,9 @@ function MainApp() {
     ai: <AiDashboard />,
     logs: <Logs />,
     corbeille: <Trash />,
+    support: <Support />,
+    requests: <Requests />,
+    tickets: <Tickets />,
     kpi: <Kpi />,
     teamlead: <TeamLead />,
     admin: <Admin mode="admin" />,
@@ -372,7 +389,7 @@ function MainApp() {
       // ou si on est principal/dev/admin/fondateur ; sinon on passe par la saisie du code.
       const env = store.db.environments.find(e => e.id === session.envId)
       const owner = store.db.accounts.find(a => a.id === s.ownerId)
-      const elevated = ['Fondateur', 'Administrateur', 'Développeur'].includes(me.role) || env?.createdBy === me.id
+      const elevated = ['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(me.role) || env?.createdBy === me.id
       const manages = me.role === 'Manager' && owner?.teamOf === me.id
       const own = s.ownerId === me.id
       if (elevated || manages || own || !s.pin) { store.enterSubEnv(s.id); setPage('dashboard') }

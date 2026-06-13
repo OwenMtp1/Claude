@@ -2,7 +2,10 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
-export const APP_VERSION = '1.10.0'
+// Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
+// formulaire de contact du site y dépose ses messages, l'app les y récupère.
+export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
+export const APP_VERSION = '1.11.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -213,7 +216,26 @@ export function allowedBricks(account) {
   return (account?.bricks || []).filter(b => planSet.has(b))
 }
 
-export const ROLES = ['Fondateur', 'Administrateur', 'Manager', 'Développeur', 'Membre']
+export const ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Manager', 'Développeur', 'Membre']
+
+// Rôles de l'équipe support BD Report : accès au back-office support (Nouvelles demandes,
+// Tickets Techniques). « Support BD Report » a exactement les mêmes permissions que « Fondateur ».
+export const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
+export const isSupportRole = (role) => SUPPORT_ROLES.includes(role)
+
+// Les 10 catégories de tickets les plus fréquentes sur un SaaS de ce type.
+export const TICKET_CATEGORIES = [
+  'Connexion & authentification',
+  'Bug ou erreur d\'affichage',
+  'Données manquantes ou incorrectes',
+  'Import / export de données',
+  'Paramètres & personnalisation',
+  'Performance / lenteur',
+  'Facturation & abonnement',
+  'Comptes & permissions',
+  'Demande de fonctionnalité',
+  'Autre / question générale',
+]
 
 // ---------------------------------------------------------------- Seed
 function emptySubEnvData() {
@@ -250,6 +272,7 @@ function emptySubEnvData() {
     noShowReasons: ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date'],
     currency: 'EUR', // devise des primes (EUR ou USD)
     tasks: [], // Mes tâches : { id, title, description, dueDate, assignee, company, contact, rdvId, done, archived, pinned, createdAt }
+    taskTrash: [], // corbeille des tâches : restaurables 30 jours
   }
 }
 
@@ -344,6 +367,8 @@ function buildSeedDb() {
     environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],
     subenvs: [{ id: subId, envId, prenom: 'Owen', nom: 'Mrani Bonnier', poste: 'BDR', service: 'Marketing', pin: '1205', photo: '', ownerId: '01' }],
     data: { [subId]: subData },
+    supportRequests: [], // « Nouvelles demandes » : formulaires de contact du site
+    tickets: [], // « Tickets Techniques » : tickets de support ouverts depuis l'app
   }
 }
 
@@ -527,6 +552,9 @@ function migrate(db) {
     if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
   })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
+  // Données globales support (partagées entre tous les comptes support)
+  db.supportRequests = db.supportRequests || []
+  db.tickets = db.tickets || []
   // Valeurs par défaut des nouveaux champs + purge de la corbeille (> 30 jours)
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   Object.values(db.data || {}).forEach(data => {
@@ -534,12 +562,14 @@ function migrate(db) {
     data.companies = data.companies || {}
     data.rdvTrash = (data.rdvTrash || []).filter(t => t.deletedAt > cutoff)
     data.noteTrash = (data.noteTrash || []).filter(t => t.deletedAt > cutoff)
+    data.taskTrash = (data.taskTrash || []).filter(t => t.deletedAt > cutoff)
     data.goals = data.goals || { rdvSemaine: 10, sqlMois: 5, primesMois: 1000 }
     data.mentions = data.mentions || []
     data.lostReasons = data.lostReasons || ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable']
     data.noShowReasons = data.noShowReasons || ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date']
     data.currency = data.currency || 'EUR'
     data.tasks = data.tasks || []
+    data.taskTrash = data.taskTrash || []
   })
   return db
 }
@@ -585,6 +615,36 @@ export function StoreProvider({ children }) {
     }
     window.addEventListener('storage', h)
     return () => window.removeEventListener('storage', h)
+  }, [])
+
+  // Récupération des messages du formulaire de contact du site (même origine, clé partagée).
+  // S'exécute au montage et dès qu'un nouveau message est déposé dans la boîte partagée.
+  useEffect(() => {
+    const pull = () => {
+      try {
+        const raw = localStorage.getItem(CONTACT_INBOX_KEY)
+        if (!raw) return
+        const inbox = JSON.parse(raw)
+        if (!Array.isArray(inbox) || !inbox.length) return
+        setDbState(prev => {
+          const known = new Set((prev.supportRequests || []).map(r => r.id))
+          const fresh = inbox.filter(i => i && i.id && !known.has(i.id))
+          if (!fresh.length) return prev
+          const next = structuredClone(prev)
+          next.supportRequests = next.supportRequests || []
+          fresh.forEach(item => next.supportRequests.unshift({
+            id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
+            lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
+            status: 'new', archived: false,
+          }))
+          return next
+        })
+      } catch (e) { /* inbox illisible : on ignore */ }
+    }
+    pull()
+    const onStorage = (e) => { if (e.key === CONTACT_INBOX_KEY) pull() }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
   }, [])
 
   const api = useMemo(() => {
@@ -750,6 +810,100 @@ export function StoreProvider({ children }) {
         if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
         setDb(d => { d.accounts.push(a); return d })
         return a
+      },
+      // ----- Identité de l'utilisateur courant pour le support (prénom + photo, sinon logo BD Report)
+      currentIdentity() {
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
+        const nom = sub?.nom || ''
+        const photo = sub?.photo || account?.photo || ''
+        return { accountId: account?.id || null, prenom, name: `${prenom}${nom ? ' ' + nom : ''}`.trim(), photo }
+      },
+      // ----- Support : « Nouvelles demandes » (formulaires de contact du site)
+      // Récupère les messages déposés par le formulaire de contact du site (même origine).
+      pullContactInbox() {
+        try {
+          const raw = localStorage.getItem(CONTACT_INBOX_KEY)
+          if (!raw) return
+          const inbox = JSON.parse(raw)
+          if (!Array.isArray(inbox) || !inbox.length) return
+          setDb(d => {
+            d.supportRequests = d.supportRequests || []
+            const known = new Set(d.supportRequests.map(r => r.id))
+            inbox.forEach(item => {
+              if (item && item.id && !known.has(item.id)) {
+                d.supportRequests.unshift({
+                  id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
+                  lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
+                  status: 'new', archived: false,
+                })
+              }
+            })
+            return d
+          })
+        } catch (e) { /* inbox illisible : on ignore */ }
+      },
+      updateSupportRequest(id, patch) {
+        setDb(d => { const r = (d.supportRequests || []).find(x => x.id === id); if (r) Object.assign(r, patch); return d })
+      },
+      deleteSupportRequest(id) {
+        setDb(d => { d.supportRequests = (d.supportRequests || []).filter(x => x.id !== id); return d })
+      },
+      // ----- Support : tickets techniques (conversation utilisateur ↔ équipe technique)
+      createTicket({ category, message }) {
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
+        const photo = sub?.photo || account?.photo || ''
+        const now = new Date().toISOString()
+        const ticket = {
+          id: uid(), category: category || 'Autre / question générale', status: 'open',
+          userAccountId: account?.id || null, userName: prenom, userPhoto: photo,
+          envId: session?.envId || null, subEnvId: session?.subEnvId || null,
+          createdAt: now, handledBy: null, typing: {},
+          messages: [
+            { id: uid(), ts: now, from: 'user', authorAccountId: account?.id || null, authorName: prenom, authorPhoto: photo, text: message || '', photo: '' },
+            { id: uid(), ts: new Date(Date.now() + 1000).toISOString(), from: 'bot', authorName: 'BD Report', authorPhoto: '', text: `Bonjour ${prenom}, merci pour votre message. Un membre de l'équipe technique BD Report va très prochainement prendre en charge votre demande. Vous recevrez la réponse directement dans cette conversation.`, photo: '' },
+          ],
+        }
+        setDb(d => { d.tickets = d.tickets || []; d.tickets.unshift(ticket); return d })
+        return ticket
+      },
+      postTicketMessage(ticketId, { text, photo, from }) {
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
+        const authorPhoto = sub?.photo || account?.photo || ''
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          t.messages.push({
+            id: uid(), ts: new Date().toISOString(), from,
+            authorAccountId: account?.id || null, authorName: prenom, authorPhoto,
+            text: text || '', photo: photo || '',
+          })
+          if (from === 'support') {
+            if (!t.handledBy) t.handledBy = account?.id || null
+            if (t.status === 'open') t.status = 'in_progress'
+          }
+          // Le message envoyé arrête l'indicateur de saisie de son auteur
+          t.typing = { ...(t.typing || {}), [from + 'At']: 0 }
+          return d
+        })
+      },
+      setTicketTyping(ticketId, side, isTyping) {
+        const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          t.typing = { ...(t.typing || {}), [side + 'At']: isTyping ? Date.now() : 0, [side + 'Name']: prenom }
+          return d
+        })
+      },
+      setTicketStatus(ticketId, status) {
+        setDb(d => { const t = (d.tickets || []).find(x => x.id === ticketId); if (t) t.status = status; return d })
+      },
+      deleteTicket(ticketId) {
+        setDb(d => { d.tickets = (d.tickets || []).filter(x => x.id !== ticketId); return d })
       },
     }
   }, [db, session])

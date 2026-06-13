@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus } from 'lucide-react'
-import { useStore, ROLES, BRICKS, uid, hashPw } from '../store.jsx'
+import { useStore, ROLES, BRICKS, uid, hashPw, isSupportRole } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
 // ---- Accès aux environnements (administrateurs) : ajouter n'importe quel utilisateur à n'importe quel environnement
@@ -89,19 +89,20 @@ function TeamInvite({ store, actor }) {
 }
 
 // canManage(actor, target) : règles de hiérarchie des permissions
+// « Support BD Report » a exactement les mêmes permissions que « Fondateur » (équipe BD Report).
 function canManage(actor, target) {
-  if (actor.role === 'Fondateur') return true
-  // Le rôle Développeur peut modifier mots de passe et informations de tout le monde (sauf Fondateur).
-  if (actor.role === 'Développeur') return target.role !== 'Fondateur'
-  if (actor.role === 'Administrateur') return target.role !== 'Fondateur'
-  if (actor.role === 'Manager') return target.teamOf === actor.id && !['Fondateur', 'Administrateur', 'Développeur'].includes(target.role)
+  if (isSupportRole(actor.role)) return true
+  // Le rôle Développeur peut modifier mots de passe et informations de tout le monde (sauf l'équipe BD Report).
+  if (actor.role === 'Développeur') return !isSupportRole(target.role)
+  if (actor.role === 'Administrateur') return !isSupportRole(target.role)
+  if (actor.role === 'Manager') return target.teamOf === actor.id && !['Fondateur', 'Support BD Report', 'Administrateur', 'Développeur'].includes(target.role)
   return false
 }
 
 function rolesAssignable(actor) {
-  if (actor.role === 'Fondateur') return ROLES
-  if (actor.role === 'Développeur') return ROLES.filter(r => r !== 'Fondateur')
-  if (actor.role === 'Administrateur') return ROLES.filter(r => r !== 'Fondateur')
+  if (isSupportRole(actor.role)) return ROLES
+  if (actor.role === 'Développeur') return ROLES.filter(r => !isSupportRole(r))
+  if (actor.role === 'Administrateur') return ROLES.filter(r => !isSupportRole(r))
   // Un manager de l'environnement peut accorder le rôle Développeur (en plus de Membre).
   if (actor.role === 'Manager') return ['Membre', 'Développeur']
   return []
@@ -109,7 +110,7 @@ function rolesAssignable(actor) {
 
 function UserRow({ u, actor, store, onDelete }) {
   const editable = canManage(actor, u)
-  const idEditable = actor.role === 'Fondateur'
+  const idEditable = isSupportRole(actor.role)
   const patch = (k, v) => store.updateAccount(u.id, { [k]: v })
   return (
     <div className="card p-3 space-y-2">
