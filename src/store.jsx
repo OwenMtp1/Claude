@@ -2,7 +2,18 @@ import React, { createContext, useContext, useEffect, useMemo, useState } from '
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
-export const APP_VERSION = '1.7.0'
+export const APP_VERSION = '1.8.0'
+
+// ---------------------------------------------------------------- Format monétaire
+export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
+// Devise courante mémorisée pour le formatage global (mise à jour par le store).
+let CURRENT_CURRENCY = 'EUR'
+export function setCurrentCurrency(c) { CURRENT_CURRENCY = c === 'USD' ? 'USD' : 'EUR' }
+export function fmtMoney(n, currency = CURRENT_CURRENCY) {
+  const v = Math.round(Number(n) || 0)
+  const sep = v.toLocaleString('fr-FR') // séparateur de milliers par espace
+  return currency === 'USD' ? `$${sep}` : `${sep} €`
+}
 
 // ---------------------------------------------------------------- Helpers dates
 export const todayISO = () => new Date().toISOString().slice(0, 10)
@@ -145,6 +156,25 @@ export const OPP_COLORS = {
   'No Show R1': 'bg-orange-100 text-orange-700', 'No Show MQL': 'bg-orange-100 text-orange-700',
 }
 
+// Palette pour les valeurs personnalisées (phases / statuts créés par l'utilisateur — micro 5)
+const CUSTOM_PALETTE = [
+  'bg-teal-100 text-teal-700', 'bg-purple-100 text-purple-700', 'bg-pink-100 text-pink-700',
+  'bg-cyan-100 text-cyan-700', 'bg-lime-100 text-lime-700', 'bg-violet-100 text-violet-700',
+  'bg-rose-100 text-rose-700', 'bg-fuchsia-100 text-fuchsia-700',
+]
+function hashIndex(str, mod) {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0
+  return h % mod
+}
+// Renvoie une classe de couleur stable pour une phase (couleur dédiée connue, sinon couleur dérivée du nom)
+export function phaseColor(phase) {
+  return PHASE_COLORS[phase] || (phase ? CUSTOM_PALETTE[hashIndex(phase, CUSTOM_PALETTE.length)] : 'bg-surface text-ink')
+}
+export function oppColor(opp) {
+  return OPP_COLORS[opp] || (opp ? CUSTOM_PALETTE[hashIndex(opp, CUSTOM_PALETTE.length)] : 'bg-surface text-ink')
+}
+
 export const RDV_FIELDS = [
   { key: 'source', label: 'Source' },
   { key: 'phase', label: 'Phase de transaction' },
@@ -168,7 +198,7 @@ export const BRICKS = [
   'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé', 'Logs',
 ]
 
-export const ROLES = ['Fondateur', 'Administrateur', 'Manager', 'Membre']
+export const ROLES = ['Fondateur', 'Administrateur', 'Manager', 'Développeur', 'Membre']
 
 // ---------------------------------------------------------------- Seed
 function emptySubEnvData() {
@@ -203,6 +233,7 @@ function emptySubEnvData() {
     mentions: [], // notifications @mention reçues : { id, ts, company, from, text, read }
     lostReasons: ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable'],
     noShowReasons: ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date'],
+    currency: 'EUR', // devise des primes (EUR ou USD)
   }
 }
 
@@ -486,6 +517,7 @@ function migrate(db) {
     data.mentions = data.mentions || []
     data.lostReasons = data.lostReasons || ['Pas de budget', 'Concurrent retenu', 'Mauvais timing', 'Pas décideur', 'Injoignable']
     data.noShowReasons = data.noShowReasons || ['Injoignable', 'A annulé', 'A oublié', 'Reporté sans date']
+    data.currency = data.currency || 'EUR'
   })
   return db
 }
@@ -503,15 +535,30 @@ export function StoreProvider({ children }) {
   const [session, setSession] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)) } catch (e) { return null }
   })
+  const [uiLang, setUiLangState] = useState(() => localStorage.getItem('bdr_lang') || 'fr')
 
-  useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(db)) }, [db])
+  const lastSavedAt = React.useRef(0)
+  useEffect(() => {
+    // Sauvegarde sûre : capture l'erreur de quota au lieu d'échouer silencieusement (bug 5).
+    try {
+      const stamp = Date.now()
+      lastSavedAt.current = stamp
+      localStorage.setItem(LS_KEY, JSON.stringify({ ...db, _savedAt: stamp }))
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent('app-toast', { detail: "⚠️ Stockage plein : sauvegarde impossible. Allégez vos photos/logos ou exportez vos données." }))
+    }
+  }, [db])
   useEffect(() => { sessionStorage.setItem(SESSION_KEY, JSON.stringify(session)) }, [session])
 
-  // Synchronisation multi-onglets : un changement dans un autre onglet est rechargé ici.
+  // Synchronisation multi-onglets : on n'adopte un état distant que s'il est plus récent
+  // que notre dernière écriture locale (évite qu'un onglet inactif écrase une modif récente — bug 9).
   useEffect(() => {
     const h = (e) => {
       if (e.key === LS_KEY && e.newValue) {
-        try { setDbState(JSON.parse(e.newValue)) } catch (err) { /* contenu invalide : on ignore */ }
+        try {
+          const incoming = JSON.parse(e.newValue)
+          if ((incoming._savedAt || 0) >= lastSavedAt.current) setDbState(incoming)
+        } catch (err) { /* contenu invalide : on ignore */ }
       }
     }
     window.addEventListener('storage', h)
@@ -523,9 +570,17 @@ export function StoreProvider({ children }) {
       const next = typeof fn === 'function' ? fn(structuredClone(prev)) : fn
       return next
     })
+    const account = session ? db.accounts.find(a => a.id === session.accountId) : null
     return {
       db, setDb, session, setSession,
-      account: session ? db.accounts.find(a => a.id === session.accountId) : null,
+      account,
+      // ----- langue de l'interface (compte connecté sinon préférence locale)
+      uiLang: account?.lang || uiLang,
+      setUiLang(lang) {
+        setUiLangState(lang)
+        localStorage.setItem('bdr_lang', lang)
+        if (account) setDb(d => { const a = d.accounts.find(x => x.id === account.id); if (a) a.lang = lang; return d })
+      },
       login(identifier, password) {
         const acc = db.accounts.find(a =>
           (a.email.toLowerCase() === identifier.toLowerCase() || a.pseudo.toLowerCase() === identifier.toLowerCase())
@@ -535,15 +590,19 @@ export function StoreProvider({ children }) {
       },
       register({ email, pseudo, password }) {
         if (db.accounts.some(a => a.email.toLowerCase() === email.toLowerCase())) return { error: 'Un compte existe déjà avec cet email.' }
-        const acc = { id: uid(), email, pseudo: pseudo || email.split('@')[0], password: hashPw(password), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null }
+        const wanted = (pseudo || email.split('@')[0]).trim()
+        if (wanted && db.accounts.some(a => a.pseudo.toLowerCase() === wanted.toLowerCase())) return { error: 'Ce pseudo est déjà pris, choisissez-en un autre.' }
+        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Membre', developer: false, photo: '', bricks: [...BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
       },
       logout() { setSession(null) },
       enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
+      setCurrency(c) { setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
       enterSubEnv(subEnvId) {
         setSession(s => ({ ...s, subEnvId }))
+        setCurrentCurrency(db.data[subEnvId]?.currency || 'EUR')
         setDb(d => {
           const data = d.data[subEnvId]
           if (data) {
@@ -610,9 +669,10 @@ export function StoreProvider({ children }) {
             id: uid(), ts: new Date().toISOString(), text: text.trim(),
             author, authorSubId: sub?.id,
           })
-          // @mentions : notifie chaque membre de l'environnement cité par son prénom
+          // @mentions : notifie chaque membre cité par son prénom (mot entier, pas un préfixe — bug 6)
           d.subenvs.filter(s => s.envId === env.id && s.id !== sub?.id).forEach(s => {
-            if (text.toLowerCase().includes('@' + s.prenom.toLowerCase())) {
+            const re = new RegExp('@' + s.prenom.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\p{N}])', 'iu')
+            if (re.test(text)) {
               const data = d.data[s.id]
               if (data) {
                 data.mentions = data.mentions || []
@@ -699,16 +759,46 @@ export function rdvNeedsSqlDate(rdv, patch) {
 
 // Synchronise les contacts d'un RDV vers le répertoire "Mes contacts"
 export function syncContacts(data, rdv) {
-  const existing = new Set(data.contacts.map(c => (c.email || c.nom || '').toLowerCase()))
+  // Upsert : met à jour la fiche existante (par email ou par nom) au lieu de créer un doublon (bug 3).
   ;(rdv.contacts || []).forEach(c => {
-    const k = (c.email || c.nom || '').toLowerCase()
-    if (!k || existing.has(k)) return
-    existing.add(k)
-    data.contacts.push({
-      id: uid(), nom: c.nom || '', poste: c.poste || '', email: c.email || '', tel: c.tel || '',
-      entreprise: rdv.entreprise || '', secteur: rdv.secteur || '', linkedin: rdv.linkedin || '',
-      source: rdv.source || '', createdAt: todayISO(),
-    })
+    const email = (c.email || '').trim().toLowerCase()
+    const nom = (c.nom || '').trim().toLowerCase()
+    if (!email && !nom) return
+    const found = data.contacts.find(x =>
+      (email && (x.email || '').toLowerCase() === email) ||
+      (!email && nom && (x.nom || '').toLowerCase() === nom))
+    if (found) {
+      // On complète sans écraser par du vide
+      if (c.nom) found.nom = c.nom
+      if (c.poste) found.poste = c.poste
+      if (c.email) found.email = c.email
+      if (c.tel) found.tel = c.tel
+      if (rdv.entreprise) found.entreprise = rdv.entreprise
+      if (rdv.secteur) found.secteur = rdv.secteur
+      if (rdv.linkedin) found.linkedin = rdv.linkedin
+      if (rdv.source) found.source = rdv.source
+    } else {
+      data.contacts.push({
+        id: uid(), nom: c.nom || '', poste: c.poste || '', email: c.email || '', tel: c.tel || '',
+        entreprise: rdv.entreprise || '', secteur: rdv.secteur || '', linkedin: rdv.linkedin || '',
+        source: rdv.source || '', createdAt: todayISO(),
+      })
+    }
   })
   return data
+}
+
+// Détecte les contacts d'un RDV déjà présents dans le répertoire (pour validation anti-doublon).
+export function findContactDuplicates(data, rdv) {
+  const dups = []
+  ;(rdv.contacts || []).forEach(c => {
+    const email = (c.email || '').trim().toLowerCase()
+    const nom = (c.nom || '').trim().toLowerCase()
+    if (!email && !nom) return
+    const found = data.contacts.find(x =>
+      (email && (x.email || '').toLowerCase() === email) ||
+      (!email && nom && (x.nom || '').toLowerCase() === nom))
+    if (found) dups.push({ incoming: c, existing: found })
+  })
+  return dups
 }

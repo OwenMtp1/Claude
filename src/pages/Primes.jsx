@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { Plus, Trash2 } from 'lucide-react'
-import { useStore, computePrimes, monthKey, monthLabel, fmtDate, parseISO, uid, SOURCES } from '../store.jsx'
+import { useStore, computePrimes, monthKey, monthLabel, fmtDate, fmtMoney, parseISO, uid, SOURCES } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 const SUIVI_TL = [
@@ -89,14 +89,14 @@ export default function Primes() {
               </>}
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-emerald-600 mb-2">{suiviPrimes.reduce((a, p) => a + p.montant, 0)} €</div>
+          <div className="text-2xl font-extrabold text-emerald-600 mb-2">{fmtMoney(suiviPrimes.reduce((a, p) => a + p.montant, 0))}</div>
           <div className="h-48">
             <ResponsiveContainer>
               <BarChart data={suiviPoints} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--line))" />
                 <XAxis dataKey="label" fontSize={11} stroke="rgb(var(--muted))" />
                 <YAxis fontSize={11} stroke="rgb(var(--muted))" />
-                <Tooltip formatter={(v) => `${v} €`} />
+                <Tooltip formatter={(v) => fmtMoney(v)} />
                 <Bar dataKey="total" name="Primes" fill="rgb(var(--brand))" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -128,7 +128,7 @@ export default function Primes() {
                   <button className="w-full flex items-center justify-between text-sm p-2 rounded-xl bg-surface hover:bg-line/50"
                     onClick={() => setOpenPrime(openPrime === p.rdvId ? '' : p.rdvId)}>
                     <span className="font-semibold">#{i + 1} — {p.entreprise} {p.figee && <span title={`Prime figée le ${p.figeeLe}`}>🔒</span>}</span>
-                    <span className="font-extrabold text-emerald-600">{p.montant} €</span>
+                    <span className="font-extrabold text-emerald-600">{fmtMoney(p.montant)}</span>
                   </button>
                   {openPrime === p.rdvId && (
                     <div className="text-xs text-muted px-3 py-2">
@@ -138,7 +138,7 @@ export default function Primes() {
                 </div>
               ))}
               <div className="flex justify-between pt-2 border-t border-line font-extrabold text-sm">
-                <span>Total</span><span>{repPrimes.reduce((a, p) => a + p.montant, 0)} €</span>
+                <span>Total</span><span>{fmtMoney(repPrimes.reduce((a, p) => a + p.montant, 0))}</span>
               </div>
             </div>
           )}
@@ -166,11 +166,11 @@ export default function Primes() {
               {rows.sort((a, b) => b.espere - a.espere).map(({ r, montant, espere, proba }) => (
                 <div key={r.id} className="flex items-center justify-between text-sm p-2 rounded-xl bg-surface flex-wrap gap-1">
                   <span className="font-semibold">{r.entreprise} <span className="text-xs text-muted font-normal">({r.phase} · {Math.round(proba * 100)} %)</span></span>
-                  <span className="text-xs text-muted">{montant} € × {Math.round(proba * 100)} % = <b className="text-emerald-600">{Math.round(espere)} €</b></span>
+                  <span className="text-xs text-muted">{fmtMoney(montant)} × {Math.round(proba * 100)} % = <b className="text-emerald-600">{fmtMoney(espere)}</b></span>
                 </div>
               ))}
               <div className="flex justify-between pt-2 border-t border-line font-extrabold text-sm">
-                <span>Prévisionnel total</span><span className="text-emerald-600">≈ {Math.round(total)} €</span>
+                <span>Prévisionnel total</span><span className="text-emerald-600">≈ {fmtMoney(total)}</span>
               </div>
             </div>
           )

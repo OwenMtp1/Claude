@@ -40,16 +40,12 @@ body.animated-bg { animation: bgshift 18s ease infinite; }
 .fade-in { animation: fadein .4s ease both; }
 @keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-/* Welcome reveal animation */
-.reveal-text {
-  display: inline-block;
-  overflow: hidden;
-  white-space: nowrap;
-  border-right: 3px solid rgb(var(--brand));
-  animation: typing 2s steps(40, end) both, blink .8s step-end infinite;
+/* Welcome reveal animation (responsive : ne déborde pas sur mobile) */
+.welcome-reveal { animation: welcomeIn 1s cubic-bezier(.2,.7,.2,1) both; }
+@keyframes welcomeIn {
+  from { opacity: 0; transform: translateY(14px) scale(.96); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: blur(0); }
 }
-@keyframes typing { from { width: 0 } to { width: 100% } }
-@keyframes blink { 50% { border-color: transparent } }
 
 /* Floating bubbles for animated themes */
 .bubble-float {

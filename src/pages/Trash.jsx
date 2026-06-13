@@ -15,15 +15,24 @@ export default function Trash() {
 
   const restoreRdv = (id) => {
     store.setSub(d => {
-      const item = d.rdvTrash.find(t => t.id === id)
-      if (!item) return d
-      const { deletedAt, ...rdv } = item
-      d.rdvs.push(rdv)
-      d.rdvTrash = d.rdvTrash.filter(t => t.id !== id)
+      const toRestore = new Set()
+      const present = new Set(d.rdvs.map(r => r.id))
+      const trashById = Object.fromEntries(d.rdvTrash.map(t => [t.id, t]))
+      // Restaure l'élément, sa chaîne de parents (sinon orphelin invisible — bug 2) et ses enfants en corbeille.
+      const pullParents = (item) => {
+        toRestore.add(item.id)
+        if (item.parentId && !present.has(item.parentId) && trashById[item.parentId]) pullParents(trashById[item.parentId])
+      }
+      const start = trashById[id]
+      if (!start) return d
+      pullParents(start)
+      d.rdvTrash.filter(t => t.parentId === id).forEach(t => toRestore.add(t.id))
+      d.rdvTrash.filter(t => toRestore.has(t.id)).forEach(t => { const { deletedAt, ...rdv } = t; d.rdvs.push(rdv) })
+      d.rdvTrash = d.rdvTrash.filter(t => !toRestore.has(t.id))
       return d
     })
     store.logAction('RDV', 'RDV restauré depuis la corbeille')
-    toast('Rendez-vous restauré')
+    toast('Rendez-vous restauré (avec son contexte)')
   }
   const restoreNote = (id) => {
     store.setSub(d => {

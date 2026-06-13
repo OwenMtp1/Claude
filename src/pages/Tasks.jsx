@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { CalendarClock, Flame, RotateCcw, Phone, Mail, ExternalLink, Building2 } from 'lucide-react'
-import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS } from '../store.jsx'
+import { useStore, parseISO, fmtDate, applyRdvAutomations, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty } from '../ui.jsx'
 
 // Date à laquelle un RDV est passé "Perdu" (depuis l'historique), sinon sa date de RDV.
@@ -22,7 +22,7 @@ function TaskCard({ r, tone, action, store }) {
       <div className="flex-1 min-w-0">
         <div className="font-bold text-sm flex items-center gap-1.5"><Building2 size={13} className="text-muted shrink-0" /> {r.entreprise || 'Sans nom'}</div>
         <div className="flex items-center gap-2 mt-1 flex-wrap text-xs text-muted">
-          <span className={`chip ${PHASE_COLORS[r.phase] || 'bg-surface text-ink'}`}>{r.phase}</span>
+          <span className={`chip ${phaseColor(r.phase)}`}>{r.phase}</span>
           {contact?.nom && <span>{contact.nom}{contact.poste ? ` · ${contact.poste}` : ''}</span>}
           <span>RDV : {fmtDate(r.dateRdv)}</span>
         </div>

@@ -125,16 +125,41 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
             </div>
           )}
           <div className="card p-4 space-y-3">
+            <h3 className="font-bold">Devise des primes (cet espace)</h3>
+            <p className="text-xs text-muted">Choisissez la devise utilisée pour afficher toutes les primes et montants.</p>
+            <div className="flex gap-2">
+              {['EUR', 'USD'].map(c => (
+                <button key={c} className={`btn text-sm ${(store.sub?.currency || 'EUR') === c ? 'bg-brand text-white' : 'bg-card border border-line'}`}
+                  onClick={() => { store.setCurrency(c); store.logAction('Paramètres', 'Devise modifiée', c) }}>
+                  {c === 'EUR' ? '€ Euro' : '$ Dollar US'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="card p-4 space-y-3">
             <h3 className="font-bold">Sous-environnements de {env?.name}</h3>
-            {mySubs.map(s => (
-              <div key={s.id} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end border-b border-line pb-3">
-                <Field label="Prénom"><input className="input" value={s.prenom} onChange={e => store.updateSubEnv(s.id, { prenom: e.target.value })} /></Field>
-                <Field label="Nom"><input className="input" value={s.nom} onChange={e => store.updateSubEnv(s.id, { nom: e.target.value })} /></Field>
-                <Field label="Poste"><input className="input" value={s.poste} onChange={e => store.updateSubEnv(s.id, { poste: e.target.value })} /></Field>
-                <Field label="Service"><input className="input" value={s.service} onChange={e => store.updateSubEnv(s.id, { service: e.target.value })} /></Field>
-                <Field label="Code (4 chiffres)"><input className="input" maxLength={4} value={s.pin} onChange={e => store.updateSubEnv(s.id, { pin: e.target.value.replace(/\D/g, '') })} /></Field>
-              </div>
-            ))}
+            <p className="text-xs text-muted">Les codes d'accès ne sont visibles que pour le manager principal de l'environnement, les administrateurs/fondateurs/développeurs, et les managers pour les membres de leur équipe.</p>
+            {mySubs.map(s => {
+              const owner = store.db.accounts.find(a => a.id === s.ownerId)
+              const isPrincipal = env?.createdBy === me.id
+              const elevated = ['Fondateur', 'Administrateur', 'Développeur'].includes(me.role) || isPrincipal
+              const managesThem = me.role === 'Manager' && owner?.teamOf === me.id
+              const own = s.ownerId === me.id
+              const canPin = elevated || managesThem || own
+              return (
+                <div key={s.id} className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end border-b border-line pb-3">
+                  <Field label="Prénom"><input className="input" value={s.prenom} onChange={e => store.updateSubEnv(s.id, { prenom: e.target.value })} /></Field>
+                  <Field label="Nom"><input className="input" value={s.nom} onChange={e => store.updateSubEnv(s.id, { nom: e.target.value })} /></Field>
+                  <Field label="Poste"><input className="input" value={s.poste} onChange={e => store.updateSubEnv(s.id, { poste: e.target.value })} /></Field>
+                  <Field label="Service"><input className="input" value={s.service} onChange={e => store.updateSubEnv(s.id, { service: e.target.value })} /></Field>
+                  <Field label="Code (4 chiffres)">
+                    {canPin
+                      ? <input className="input" maxLength={4} value={s.pin} onChange={e => store.updateSubEnv(s.id, { pin: e.target.value.replace(/\D/g, '') })} />
+                      : <input className="input" value="••••" disabled title="Code masqué" />}
+                  </Field>
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

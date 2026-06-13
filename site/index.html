@@ -361,6 +361,47 @@ const FEATURES = {
         ['📱','Installable PWA','Install BD Report on mobile and desktop; works offline.'] ],
     ],
   },
+  es: {
+    cats: ['📈 Dirección','📅 Actividad','🧲 Pipeline','💶 Remuneración','🤝 Colaboración','🗄️ Datos'],
+    items: [
+      [ ['📊','Paneles completos','Citas concertadas / realizadas, MQL, SQL, firmas, fuentes, cargos — con líneas de tiempo y detalle en cada cifra.'],
+        ['🎯','Objetivos y cuotas','Metas semanales y mensuales con barras de progreso y alertas de retraso.'],
+        ['🧮','Informes periódicos','Semanal, mensual, trimestral o anual, con variación vs el periodo anterior y exportación a PDF.'],
+        ['🚀','Velocidad del pipeline','Tiempo medio en cada fase, cuello de botella detectado automáticamente.'],
+        ['💡','Paneles por prompt','Describe el panel que quieres y la IA lo arma con tus datos.'],
+        ['📺','Modo presentación','Panel a pantalla completa para las TV de la oficina.'] ],
+      [ ['📅','Gestión de citas','Todas tus citas con varios contactos, seguimientos prerellenados, campos configurables y filtros completos.'],
+        ['🗓️','Calendario multivista','Día, semana, mes, año — citas coloreadas por fase, clicables.'],
+        ['✅','Tareas prioritarias','No-shows a reprogramar, oportunidades abiertas a trabajar, leads perdidos a recuperar (filtros 6 meses / 1 año).'],
+        ['🔁','Automatizaciones','Ganada → SQL, Perdida → KO, fecha de SQL solicitada automáticamente, contactos sincronizados.'],
+        ['🔔','Motivos guiados','Motivo de pérdida y de no-show sugeridos en el momento justo, listas personalizables.'],
+        ['🤖','Asistente integrado','Crea una cita, una nota o un baremo de primas en lenguaje natural; pide tus estadísticas.'] ],
+      [ ['🧲','Kanban por empresa','Una tarjeta por empresa, sin duplicados. Arrastra y suelta para cambiar el estado (ratón y táctil).'],
+        ['⏱️','Vida del lead','«Activo desde hace X días» y tiempo pasado en cada fase.'],
+        ['⚠️','Alertas de duplicado y conflicto','Aviso cuando una empresa ya está trabajada — por ti o por un compañero.'],
+        ['🏢','Ficha de cuenta 360°','Todas las citas, contactos, notas y comentarios de una empresa, con datos enriquecibles.'],
+        ['🔎','Búsqueda global','Ctrl+K: empresas, contactos, citas y notas al instante.'],
+        ['📇','Contactos autoalimentados','Cada cita alimenta tu agenda; importa/exporta CSV y Excel, filtrados o no.'] ],
+      [ ['💶','Baremo configurable','Tramos de plantilla × fuente del lead, totalmente editable.'],
+        ['🔒','Primas versionadas','Cada prima se congela con el baremo vigente al pasar a SQL — el pasado no cambia.'],
+        ['🗓️','La regla del 15','SQL antes del 15: se paga este mes; después: el mes siguiente. Automático.'],
+        ['🔮','Previsión ponderada','Tus primas futuras estimadas según la probabilidad de cada fase.'],
+        ['📈','Seguimiento gráfico','Evolución de tus primas por mes de pago, con informe detallado auditable.'],
+        ['🧾','Reparto analítico','Fuentes × tramos de plantilla: de dónde vienen tus primas.'] ],
+      [ ['👥','Pipeline de empresa compartido','La vista de organización: quién trabaja qué, visible para todos.'],
+        ['💬','Comentarios y @menciones','Comenta en las fichas de cuenta; menciona a un compañero y recibe aviso.'],
+        ['🧑‍✈️','Dirección de equipo','Previsión mensual con proyección, daily standup y alertas de desvío automáticas.'],
+        ['🔀','Reasignación de leads','Mueve cuentas entre comerciales en 3 clics, con trazabilidad.'],
+        ['🌳','Organigrama','Managers y equipos mostrados jerárquicamente, con fotos.'],
+        ['🛡️','Roles y permisos','Fundador, Administrador, Manager, Miembro — módulos activables por usuario.'] ],
+      [ ['🗄️','Multientorno','Espacios estancos por empresa y por colaborador, protegidos con código PIN.'],
+        ['📜','Registros de auditoría','Cada acción registrada y fechada, filtrable por tarea y por fecha.'],
+        ['🗑️','Papelera 30 días','Todo lo eliminado se puede restaurar durante un mes.'],
+        ['💾','Copia y restauración','Exportación completa en JSON, restaurable en cualquier copia.'],
+        ['🎨','20 temas','10 temas clásicos + 10 ambientes animados, incluido modo noche.'],
+        ['📱','PWA instalable','Instala BD Report en móvil y escritorio; funciona sin conexión.'] ],
+    ],
+  },
 }
 
 // ---------- i18n ----------
@@ -388,27 +429,47 @@ const I18N = {
     'contact.name':'Your name & company','contact.email':'Your email','contact.msg':'Your message...','contact.send':'Send message',
     'foot.tag':'Run your pipeline. Cash your bonuses.','foot.login':'Log in →',
   },
+  es: {
+    'nav.features':'Funciones','nav.pricing':'Precios','nav.blog':'Blog','nav.contact':'Contacto','nav.login':'Iniciar sesión',
+    'hero.chip':'⚡ Hecho por y para BDR / SDR',
+    'hero.title':'Dirige tu pipeline.<br><span>Cobra tus primas.</span>',
+    'hero.sub':'BD Report reúne tus citas, tu pipeline, tus primas y tus paneles en un único espacio — con dirección de equipo para los managers.',
+    'hero.cta1':'Entrar a mi espacio','hero.cta2':'Descubrir las funciones',
+    'mock.sql':'SQL generados','mock.primes':'Primas del mes','mock.rdv':'Citas realizadas — este año',
+    'feat.chip':'Funciones','feat.title':'Todo el día de un BDR, en un solo lugar',
+    'feat.sub':'Seis familias de funciones que cubren la prospección desde la primera cita hasta el pago de la prima.',
+    'nav.product':'Producto ▾','cat.pilotage':'Dirección','cat.activite':'Actividad','cat.pipeline':'Pipeline','cat.remuneration':'Remuneración','cat.collaboration':'Colaboración','cat.donnees':'Datos',
+    'pricing.chip':'Precios','pricing.title':'Únete a la beta — oferta exclusiva y limitada','pricing.sub':'BD Report está en beta privada: plazas restringidas, acceso privilegiado y tu voz en la hoja de ruta.',
+    'pricing.badge':'⭐ Oferta exclusiva — plazas limitadas','pricing.beta':'Beta Tester','pricing.duration':'durante toda la beta',
+    'pricing.bdesc':'Accede a todo BD Report antes que nadie, a cambio de tus comentarios.',
+    'pricing.b1':'1 entorno de organización','pricing.b2':'Hasta 5 cuentas de colaboradores','pricing.b3':'Uso limitado: volúmenes adaptados a la fase de prueba','pricing.b4':'Todas las funciones, sin excepción','pricing.b5':'Línea directa con el equipo de producto',
+    'pricing.apply':'Solicitar mi plaza','pricing.note':'Los planes Starter, Pro y Empresa llegarán al final de la beta. Los beta testers tendrán condiciones preferentes de por vida.',
+    'blog.title':'El blog de los equipos outbound','blog.sub':'Consejos de prospección, experiencias y novedades de producto — primeros artículos muy pronto.',
+    'blog.t1':'Prospección','blog.a1':'Cold call: 7 aperturas que ganan 30 segundos de atención','blog.soon':'Próximamente',
+    'blog.t2':'Remuneración','blog.a2':'Crear un baremo de comisiones que tus BDR entiendan','blog.soon2':'Próximamente',
+    'blog.t3':'Management','blog.a3':'El daily standup perfecto dura 9 minutos: este es el formato','blog.soon3':'Próximamente',
+    'contact.title':'Hablemos de tu equipo','contact.sub':'¿Una pregunta, una demo, una colaboración? Escríbenos.',
+    'contact.name':'Tu nombre y empresa','contact.email':'Tu correo','contact.msg':'Tu mensaje...','contact.send':'Enviar mensaje',
+    'foot.tag':'Dirige tu pipeline. Cobra tus primas.','foot.login':'Iniciar sesión →',
+  },
 }
+const LANGSEQ = ['fr', 'en', 'es']
+const LANGBTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
 let lang = localStorage.getItem('bdr_site_lang') || 'fr'
 const frDefaults = {}
 document.querySelectorAll('[data-i18n]').forEach(el => frDefaults[el.dataset.i18n] = el.innerHTML)
 document.querySelectorAll('[data-i18n-ph]').forEach(el => frDefaults[el.dataset.i18nPh] = el.placeholder)
+const T = (k) => lang === 'fr' ? frDefaults[k] : ((I18N[lang] && I18N[lang][k]) ?? frDefaults[k])
 
 function applyLang() {
   document.documentElement.lang = lang
-  document.querySelectorAll('[data-i18n]').forEach(el => {
-    const k = el.dataset.i18n
-    el.innerHTML = lang === 'fr' ? frDefaults[k] : (I18N.en[k] || frDefaults[k])
-  })
-  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
-    const k = el.dataset.i18nPh
-    el.placeholder = lang === 'fr' ? frDefaults[k] : (I18N.en[k] || frDefaults[k])
-  })
-  document.getElementById('langBtn').textContent = lang === 'fr' ? '🇬🇧 EN' : '🇫🇷 FR'
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = T(el.dataset.i18n) })
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => { el.placeholder = T(el.dataset.i18nPh) })
+  document.getElementById('langBtn').textContent = LANGBTN[lang]
   renderTabs()
 }
 function toggleLang() {
-  lang = lang === 'fr' ? 'en' : 'fr'
+  lang = LANGSEQ[(LANGSEQ.indexOf(lang) + 1) % LANGSEQ.length]
   localStorage.setItem('bdr_site_lang', lang)
   applyLang()
 }
