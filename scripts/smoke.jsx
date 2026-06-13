@@ -38,6 +38,11 @@ async function main() {
   const origError = console.error
   console.error = (...a) => { errors.push(a.join(' ')); origError(...a) }
 
+  // Une demande de contact déposée par le site (clé partagée) doit être ingérée et générer un projet.
+  win.localStorage.setItem('bdrflow_contact_inbox_v1', JSON.stringify([
+    { id: 'req-smoke', name: 'ACME Corp', email: 'a@acme.com', message: 'Bonjour, on veut une démo.', createdAt: new Date().toISOString() },
+  ]))
+
   const container = win.document.createElement('div')
   win.document.body.appendChild(container)
   const root = createRoot(container)
@@ -83,7 +88,8 @@ async function main() {
 
   // 6. Navigation sur chaque page
   for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Gestion Administration']) {
-    const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === label)
+    // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
+    const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
     await click(btn)
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
@@ -102,6 +108,18 @@ async function main() {
   if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in Tickets Techniques')
   await click(navBtn('Clients'))
   if (!text().includes('PeopleSpheres')) throw new Error('Client not auto-created in Clients kanban')
+  // La demande du site est arrivée dans Nouvelles demandes...
+  await click(navBtn('Nouvelles demandes'))
+  if (!text().includes('ACME Corp')) throw new Error('Contact request not ingested into Nouvelles demandes')
+  // ...et a généré automatiquement un projet d'implémentation.
+  await click(navBtn('Gestion de Projet'))
+  if (!text().includes('ACME Corp')) throw new Error('Auto-project from request not created')
+  // Création manuelle d'un projet : le formulaire + le planning Gantt doivent fonctionner.
+  await click(find('button', 'Nouveau projet'))
+  if (!text().includes('Phases du projet')) throw new Error('Project form did not open')
+  await type([...container.querySelectorAll('input')].find(i => (i.getAttribute('placeholder') || '').includes('Déploiement')), 'Projet manuel')
+  await click(find('button', 'Enregistrer'))
+  if (!text().includes('Avancement')) throw new Error('Project not created / Gantt did not render')
 
   // 7. Créer un RDV via le formulaire : validation des champs obligatoires puis création réelle
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))

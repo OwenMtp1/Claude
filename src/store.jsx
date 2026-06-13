@@ -23,6 +23,26 @@ export const todayISO = () => new Date().toISOString().slice(0, 10)
 export const parseISO = (s) => (s ? new Date(s + 'T00:00:00') : null)
 export const fmtDate = (s) => (s ? new Date(s + 'T00:00:00').toLocaleDateString('fr-FR') : '—')
 export const uid = () => Math.random().toString(36).slice(2, 10)
+// Ajout de jours en UTC (stable quel que soit le fuseau du navigateur)
+const addDaysISO = (s, n) => { const d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+
+// Construit un projet d'implémentation par défaut à partir d'une demande entrante.
+export function makeProjectFromRequest(req) {
+  const pick = ['Cadrage', 'Implémentation', 'Formation', 'Go-live']
+  const colors = ['#3b5bdb', '#0ea5e9', '#f59e0b', '#10b981']
+  let cursor = todayISO()
+  const phases = pick.map((name, i) => {
+    const start = cursor
+    const end = addDaysISO(start, 6)
+    cursor = addDaysISO(end, 1)
+    return { id: uid(), name, start, end, done: false, color: colors[i] }
+  })
+  return {
+    id: uid(), name: `Implémentation — ${req.name || 'Client'}`, clientName: req.name || 'Client',
+    envId: null, owner: '', status: 'prevu', phases, createdAt: new Date().toISOString(),
+    sourceRequestId: req.id,
+  }
+}
 
 // ---------------------------------------------------------------- SHA-256 (synchrone, compact)
 // Les mots de passe sont stockés hashés ("sha256:<hex>"), jamais en clair.
@@ -608,6 +628,12 @@ function migrate(db) {
   db.tickets = db.tickets || []
   db.clients = db.clients || []
   db.projects = db.projects || []
+  // Chaque demande reçue donne lieu à un projet d'implémentation (création automatique, idempotente).
+  db.supportRequests.forEach(req => {
+    if (req && req.id && !db.projects.some(p => p.sourceRequestId === req.id)) {
+      db.projects.unshift(makeProjectFromRequest(req))
+    }
+  })
   // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
   const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   db.supportTrash = (db.supportTrash || []).filter(t => t.deletedAt > supCutoff)
@@ -688,11 +714,16 @@ export function StoreProvider({ children }) {
           if (!fresh.length) return prev
           const next = structuredClone(prev)
           next.supportRequests = next.supportRequests || []
-          fresh.forEach(item => next.supportRequests.unshift({
-            id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
-            lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
-            status: 'new', archived: false,
-          }))
+          next.projects = next.projects || []
+          fresh.forEach(item => {
+            next.supportRequests.unshift({
+              id: item.id, name: item.name || '', email: item.email || '', message: item.message || '',
+              lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
+              status: 'new', archived: false,
+            })
+            // Création automatique d'un projet d'implémentation pour chaque nouvelle demande
+            if (!next.projects.some(p => p.sourceRequestId === item.id)) next.projects.unshift(makeProjectFromRequest(item))
+          })
           return next
         })
       } catch (e) { /* inbox illisible : on ignore */ }
@@ -885,6 +916,7 @@ export function StoreProvider({ children }) {
           if (!Array.isArray(inbox) || !inbox.length) return
           setDb(d => {
             d.supportRequests = d.supportRequests || []
+            d.projects = d.projects || []
             const known = new Set(d.supportRequests.map(r => r.id))
             inbox.forEach(item => {
               if (item && item.id && !known.has(item.id)) {
@@ -893,6 +925,7 @@ export function StoreProvider({ children }) {
                   lang: item.lang || 'fr', createdAt: item.createdAt || new Date().toISOString(),
                   status: 'new', archived: false,
                 })
+                if (!d.projects.some(p => p.sourceRequestId === item.id)) d.projects.unshift(makeProjectFromRequest(item))
               }
             })
             return d
