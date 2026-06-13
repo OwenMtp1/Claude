@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Trash2, RotateCcw, CalendarDays, StickyNote } from 'lucide-react'
+import { Trash2, RotateCcw, CalendarDays, StickyNote, CheckSquare } from 'lucide-react'
 import { useStore, fmtDate } from '../store.jsx'
 import { Empty, Confirm, toast } from '../ui.jsx'
 
@@ -12,6 +12,7 @@ export default function Trash() {
 
   const rdvs = sub.rdvTrash || []
   const notes = sub.noteTrash || []
+  const tasks = sub.taskTrash || []
 
   const restoreRdv = (id) => {
     store.setSub(d => {
@@ -46,12 +47,25 @@ export default function Trash() {
     store.logAction('Note', 'Note restaurée depuis la corbeille')
     toast('Note restaurée')
   }
+  const restoreTask = (id) => {
+    store.setSub(d => {
+      const item = (d.taskTrash || []).find(t => t.id === id)
+      if (!item) return d
+      const { deletedAt, ...task } = item
+      d.tasks = [...(d.tasks || []), task]
+      d.taskTrash = d.taskTrash.filter(t => t.id !== id)
+      return d
+    })
+    store.logAction('Tâche', 'Tâche restaurée depuis la corbeille')
+    toast('Tâche restaurée')
+  }
   const purge = () => {
     const { kind, id } = confirmPurge
     store.setSub(d => {
-      if (kind === 'all') { d.rdvTrash = []; d.noteTrash = [] }
+      if (kind === 'all') { d.rdvTrash = []; d.noteTrash = []; d.taskTrash = [] }
       if (kind === 'rdv') d.rdvTrash = d.rdvTrash.filter(t => t.id !== id)
       if (kind === 'note') d.noteTrash = d.noteTrash.filter(t => t.id !== id)
+      if (kind === 'task') d.taskTrash = (d.taskTrash || []).filter(t => t.id !== id)
       return d
     })
     toast('Supprimé définitivement')
@@ -62,7 +76,7 @@ export default function Trash() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold flex items-center gap-2"><Trash2 size={20} className="text-brand" /> Corbeille</h2>
-        {(rdvs.length > 0 || notes.length > 0) && (
+        {(rdvs.length > 0 || notes.length > 0 || tasks.length > 0) && (
           <button className="btn-ghost text-xs text-red-500" onClick={() => setConfirmPurge({ kind: 'all' })}>Vider la corbeille</button>
         )}
       </div>
@@ -94,6 +108,22 @@ export default function Trash() {
                 <span className="text-xs text-muted">expire dans {daysLeft(n.deletedAt)} j</span>
                 <button className="btn-ghost !py-1 text-xs" onClick={() => restoreNote(n.id)}><RotateCcw size={12} /> Restaurer</button>
                 <button className="btn-danger !py-1 text-xs" onClick={() => setConfirmPurge({ kind: 'note', id: n.id })}><Trash2 size={12} /></button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card p-4">
+        <h3 className="font-bold mb-2 flex items-center gap-1.5"><CheckSquare size={15} /> Tâches ({tasks.length})</h3>
+        {tasks.length === 0 ? <Empty text="Aucune tâche dans la corbeille." /> : (
+          <div className="space-y-1.5">
+            {tasks.map(t => (
+              <div key={t.id} className="flex items-center gap-2 p-2 rounded-xl bg-surface text-sm flex-wrap">
+                <span className="font-semibold flex-1">{t.title || 'Sans titre'} <span className="text-xs text-muted font-normal">{t.dueDate ? `— échéance ${fmtDate(t.dueDate)}` : ''}</span></span>
+                <span className="text-xs text-muted">expire dans {daysLeft(t.deletedAt)} j</span>
+                <button className="btn-ghost !py-1 text-xs" onClick={() => restoreTask(t.id)}><RotateCcw size={12} /> Restaurer</button>
+                <button className="btn-danger !py-1 text-xs" onClick={() => setConfirmPurge({ kind: 'task', id: t.id })}><Trash2 size={12} /></button>
               </div>
             ))}
           </div>

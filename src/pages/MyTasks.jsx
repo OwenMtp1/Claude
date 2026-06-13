@@ -43,7 +43,21 @@ export default function MyTasks() {
   const togglePin = (id) => setTasks(ts => ts.map(t => t.id === id ? { ...t, pinned: !t.pinned } : t))
   const archive = (id) => { setTasks(ts => ts.map(t => t.id === id ? { ...t, archived: true, pinned: false } : t)); toast('Tâche archivée') }
   const unarchive = (id) => setTasks(ts => ts.map(t => t.id === id ? { ...t, archived: false } : t))
-  const remove = (id) => { setTasks(ts => ts.filter(t => t.id !== id)); store.logAction('Tâche', 'Tâche supprimée'); toast('Tâche supprimée'); setConfirmDel(null) }
+  const remove = (id) => {
+    // Suppression douce : la tâche part dans la corbeille (restaurable 30 jours), comme les RDV et notes.
+    store.setSub(d => {
+      const task = (d.tasks || []).find(t => t.id === id)
+      if (!task) return d
+      return {
+        ...d,
+        tasks: d.tasks.filter(t => t.id !== id),
+        taskTrash: [...(d.taskTrash || []), { ...task, deletedAt: new Date().toISOString() }],
+      }
+    })
+    store.logAction('Tâche', 'Tâche supprimée')
+    toast('Tâche déplacée dans la corbeille')
+    setConfirmDel(null)
+  }
 
   const memberName = (id) => { const m = members.find(x => x.id === id); return m ? `${m.prenom} ${m.nom}` : '' }
 
@@ -141,7 +155,7 @@ export default function MyTasks() {
         </Modal>
       )}
 
-      {confirmDel && <Confirm message="Supprimer cette tâche ?" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
+      {confirmDel && <Confirm message="Déplacer cette tâche dans la corbeille ?" onYes={() => remove(confirmDel)} onNo={() => setConfirmDel(null)} />}
     </div>
   )
 }
