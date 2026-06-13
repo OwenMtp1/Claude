@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react'
 import { Download, Upload, Trash2, Search } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate } from '../store.jsx'
-import { Empty, Confirm } from '../ui.jsx'
+import { useStore, uid, todayISO, fmtDate, SOURCES } from '../store.jsx'
+import { Empty, Confirm, Select } from '../ui.jsx'
+import { openCompany } from './Company.jsx'
 
 const COLS = [
   ['nom', 'Nom & Prénom'], ['poste', 'Poste'], ['entreprise', 'Entreprise'],
@@ -42,22 +43,35 @@ export default function Contacts() {
   const sub = store.sub
   const [selected, setSelected] = useState(new Set())
   const [q, setQ] = useState('')
+  const [fEntreprise, setFEntreprise] = useState('')
+  const [fPoste, setFPoste] = useState('')
+  const [fSource, setFSource] = useState('')
+  const [fSecteur, setFSecteur] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
   const fileRef = useRef(null)
 
+  const allOf = (key) => [...new Set(sub.contacts.map(c => c[key]).filter(Boolean))].sort()
+  const hasFilters = !!(q || fEntreprise || fPoste || fSource || fSecteur)
+
   const contacts = sub.contacts.filter(c =>
-    !q || [c.nom, c.email, c.entreprise, c.poste].some(v => (v || '').toLowerCase().includes(q.toLowerCase())))
+    (!q || [c.nom, c.email, c.entreprise, c.poste].some(v => (v || '').toLowerCase().includes(q.toLowerCase())))
+    && (!fEntreprise || c.entreprise === fEntreprise)
+    && (!fPoste || c.poste === fPoste)
+    && (!fSource || c.source === fSource)
+    && (!fSecteur || c.secteur === fSecteur))
 
   const toggle = (id) => setSelected(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
 
   const exportCSV = (onlySelected) => {
-    const list = onlySelected ? sub.contacts.filter(c => selected.has(c.id)) : sub.contacts
+    // Sans filtre : tout. Avec filtre(s) : uniquement les contacts filtrés.
+    const list = onlySelected ? sub.contacts.filter(c => selected.has(c.id)) : contacts
     const blob = new Blob(['﻿' + toCSV(list)], { type: 'text/csv;charset=utf-8' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = 'contacts.csv'
     a.click()
     URL.revokeObjectURL(a.href)
+    store.logAction('Contact', 'Export CSV', `${list.length} contact(s)${onlySelected ? ' (sélection)' : hasFilters ? ' (filtre)' : ''}`)
   }
 
   const importCSV = (file) => {
@@ -65,6 +79,7 @@ export default function Contacts() {
     reader.onload = () => {
       const added = parseCSV(String(reader.result))
       store.setSub(d => ({ ...d, contacts: [...d.contacts, ...added] }))
+      store.logAction('Contact', 'Import CSV', `${added.length} contact(s) depuis ${file.name}`)
     }
     reader.readAsText(file)
   }
@@ -76,7 +91,9 @@ export default function Contacts() {
         <div className="flex items-center gap-2">
           <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={e => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = '' }} />
           <button className="btn-ghost text-xs" onClick={() => fileRef.current.click()}><Upload size={14} /> Importer CSV</button>
-          <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}><Download size={14} /> Exporter tout</button>
+          <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
+            <Download size={14} /> {hasFilters ? `Exporter le filtre (${contacts.length})` : 'Exporter tout'}
+          </button>
           {selected.size > 0 && <>
             <button className="btn-primary text-xs" onClick={() => exportCSV(true)}><Download size={14} /> Exporter la sélection ({selected.size})</button>
             <button className="btn-danger text-xs" onClick={() => setConfirmDel(true)}><Trash2 size={14} /></button>
@@ -84,9 +101,14 @@ export default function Contacts() {
         </div>
       </div>
 
-      <div className="card p-3 flex items-center gap-2">
+      <div className="card p-3 flex items-center gap-2 flex-wrap">
         <Search size={15} className="text-muted" />
-        <input className="bg-transparent outline-none text-sm flex-1" placeholder="Rechercher un contact, une entreprise, un poste..." value={q} onChange={e => setQ(e.target.value)} />
+        <input className="bg-transparent outline-none text-sm flex-1 min-w-[12rem]" placeholder="Rechercher un contact, une entreprise, un poste..." value={q} onChange={e => setQ(e.target.value)} />
+        <Select value={fEntreprise} onChange={setFEntreprise} options={allOf('entreprise')} placeholder="Entreprise : toutes" className="!w-auto !py-1.5 text-xs" />
+        <Select value={fPoste} onChange={setFPoste} options={allOf('poste')} placeholder="Poste : tous" className="!w-auto !py-1.5 text-xs" />
+        <Select value={fSecteur} onChange={setFSecteur} options={allOf('secteur')} placeholder="Secteur : tous" className="!w-auto !py-1.5 text-xs" />
+        <Select value={fSource} onChange={setFSource} options={SOURCES} placeholder="Source : toutes" className="!w-auto !py-1.5 text-xs" />
+        {hasFilters && <button className="text-xs text-brand underline" onClick={() => { setQ(''); setFEntreprise(''); setFPoste(''); setFSource(''); setFSecteur('') }}>Réinitialiser</button>}
       </div>
 
       <div className="card overflow-x-auto">
@@ -107,7 +129,7 @@ export default function Contacts() {
                 <td className="py-2 pl-3"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} /></td>
                 <td className="font-semibold">{c.nom || '—'}</td>
                 <td className="text-muted">{c.poste || '—'}</td>
-                <td>{c.entreprise || '—'}</td>
+                <td>{c.entreprise ? <button className="hover:text-brand hover:underline" title="Ouvrir la fiche entreprise" onClick={() => openCompany(c.entreprise)}>{c.entreprise}</button> : '—'}</td>
                 <td className="text-xs">{c.email || '—'}</td>
                 <td className="text-xs">{c.tel || '—'}</td>
                 <td className="text-muted text-xs">{c.secteur || '—'}</td>
@@ -122,7 +144,7 @@ export default function Contacts() {
 
       {confirmDel && (
         <Confirm message={`Supprimer ${selected.size} contact(s) ?`}
-          onYes={() => { store.setSub(d => ({ ...d, contacts: d.contacts.filter(c => !selected.has(c.id)) })); setSelected(new Set()); setConfirmDel(false) }}
+          onYes={() => { store.logAction('Contact', 'Contacts supprimés', `${selected.size} contact(s)`); store.setSub(d => ({ ...d, contacts: d.contacts.filter(c => !selected.has(c.id)) })); setSelected(new Set()); setConfirmDel(false) }}
           onNo={() => setConfirmDel(false)} />
       )}
     </div>

@@ -145,6 +145,38 @@ export default function Primes() {
         </div>
       </div>
 
+      {/* Prévisionnel de primes : opportunités en cours pondérées par leur phase */}
+      <div className="card p-4">
+        <h3 className="font-bold mb-1">Prévisionnel de primes</h3>
+        <p className="text-xs text-muted mb-3">Estimation des primes à venir : montant du barème de chaque opportunité en cours, pondéré par sa probabilité de passage en SQL selon la phase (R1 : 25 % · R2 : 40 % · MQL : 60 %).</p>
+        {(() => {
+          const PROBA = { R1: 0.25, R2: 0.4, MQL: 0.6 }
+          const pending = sub.rdvs.filter(r => r.opportunite === 'En cours' && PROBA[r.phase])
+          const rows = pending.map(r => {
+            const eff = Number(r.effectif) || 0
+            const bar = sub.bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max) && (!b.leadSource || b.leadSource === r.source))
+              || sub.bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max))
+            const montant = bar ? Number(bar.montant) || 0 : 0
+            return { r, montant, espere: montant * PROBA[r.phase], proba: PROBA[r.phase] }
+          }).filter(x => x.montant > 0)
+          const total = rows.reduce((a, x) => a + x.espere, 0)
+          if (!rows.length) return <Empty text="Aucune opportunité en cours avec un barème applicable." />
+          return (
+            <div className="space-y-1.5">
+              {rows.sort((a, b) => b.espere - a.espere).map(({ r, montant, espere, proba }) => (
+                <div key={r.id} className="flex items-center justify-between text-sm p-2 rounded-xl bg-surface flex-wrap gap-1">
+                  <span className="font-semibold">{r.entreprise} <span className="text-xs text-muted font-normal">({r.phase} · {Math.round(proba * 100)} %)</span></span>
+                  <span className="text-xs text-muted">{montant} € × {Math.round(proba * 100)} % = <b className="text-emerald-600">{Math.round(espere)} €</b></span>
+                </div>
+              ))}
+              <div className="flex justify-between pt-2 border-t border-line font-extrabold text-sm">
+                <span>Prévisionnel total</span><span className="text-emerald-600">≈ {Math.round(total)} €</span>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+
       {/* Tableau répartition sources × tranches d'effectif */}
       <div className="card p-4 overflow-x-auto">
         <h3 className="font-bold mb-3">Répartition des leads (sources × tranches d'effectif)</h3>
@@ -177,7 +209,7 @@ export default function Primes() {
       <div className="card p-4 overflow-x-auto">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-bold">Barème de commissions</h3>
-          <button className="btn-primary !py-1.5 text-xs" onClick={() => setBareme([...sub.bareme, { id: uid(), min: 0, max: 0, montant: 0, leadSource: '' }])}>
+          <button className="btn-primary !py-1.5 text-xs" onClick={() => { setBareme([...sub.bareme, { id: uid(), min: 0, max: 0, montant: 0, leadSource: '' }]); store.logAction('Prime', 'Catégorie de commission ajoutée') }}>
             <Plus size={14} /> Ajouter une catégorie
           </button>
         </div>

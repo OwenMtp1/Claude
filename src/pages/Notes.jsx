@@ -44,6 +44,7 @@ export default function Notes({ onCreateRdvFromNote }) {
       else notes.push(editing)
       return [...notes]
     })
+    store.logAction('Note', 'Note enregistrée', editing.title)
     setEditing(null)
   }
 
@@ -144,6 +145,7 @@ export default function Notes({ onCreateRdvFromNote }) {
                     if (i >= 0) ns[i] = v; else ns.push(v)
                     return [...ns]
                   })
+                  store.logAction('Note', 'Note archivée', editing.title)
                   setEditing(null)
                 }}><Archive size={15} /> Archiver la note</button>
                 <button className="btn-ghost" onClick={() => { save(); onCreateRdvFromNote(editing.content) }}>
@@ -192,7 +194,7 @@ export default function Notes({ onCreateRdvFromNote }) {
         </Modal>
       )}
 
-      {confirmDel && <Confirm message="Supprimer cette note ?" onYes={() => { setNotes(ns => ns.filter(x => x.id !== confirmDel)); setConfirmDel(null) }} onNo={() => setConfirmDel(null)} />}
+      {confirmDel && <Confirm message="Supprimer cette note ?" onYes={() => { store.logAction('Note', 'Note supprimée', sub.notes.find(n => n.id === confirmDel)?.title || ''); setNotes(ns => ns.filter(x => x.id !== confirmDel)); setConfirmDel(null) }} onNo={() => setConfirmDel(null)} />}
     </div>
   )
 }

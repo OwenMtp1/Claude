@@ -43,6 +43,51 @@ function runCommand(text, store) {
     return `💶 Catégorie de commission ajoutée : ${primeMatch[2]}–${primeMatch[3]} collaborateurs → ${primeMatch[1]} €.`
   }
 
+  // ---- Questions analytiques
+  if (t.includes('meilleur') && (t.includes('canal') || t.includes('source') || t.includes('provenance'))) {
+    const counts = {}
+    sub.rdvs.forEach(r => {
+      const k = r.provenance || r.source
+      if (!k) return
+      counts[k] = counts[k] || { total: 0, sql: 0 }
+      counts[k].total++
+      if (['SQL', 'Signée'].includes(r.phase)) counts[k].sql++
+    })
+    const ranked = Object.entries(counts).sort((a, b) => b[1].sql - a[1].sql || b[1].total - a[1].total)
+    if (!ranked.length) return 'Pas encore assez de données pour identifier un meilleur canal.'
+    const [best, s] = ranked[0]
+    return `🏅 Votre meilleur canal est « ${best} » : ${s.sql} SQL sur ${s.total} RDV (${Math.round((s.sql / s.total) * 100)} % de conversion).\n` +
+      ranked.slice(1, 4).map(([k, v]) => `· ${k} : ${v.sql} SQL / ${v.total} RDV`).join('\n')
+  }
+  if ((t.includes('relancer') || t.includes('relance')) && (t.includes('lead') || t.includes('qui') || t.includes('quel'))) {
+    const stale = sub.rdvs.filter(r => r.opportunite === 'En cours')
+      .sort((a, b) => (a.dateRdv || '').localeCompare(b.dateRdv || '')).slice(0, 3)
+    const noShows = sub.rdvs.filter(r => r.opportunite === 'No Show R1')
+    if (!stale.length && !noShows.length) return 'Rien à relancer pour le moment — pipeline à jour ! 🎉'
+    let msg = '🎯 À relancer en priorité :\n'
+    noShows.forEach(r => { msg += `· ${r.entreprise} — No Show R1 à replanifier\n` })
+    stale.forEach(r => { msg += `· ${r.entreprise} — ${r.phase}, RDV du ${r.dateRdv || '?'}\n` })
+    return msg + 'Retrouvez tout dans l\'onglet « Tâches prioritaires ».'
+  }
+  if (t.includes('conversion') || t.includes('taux')) {
+    const total = sub.rdvs.length || 1
+    const mql = sub.rdvs.filter(r => ['MQL', 'SQL', 'Signée'].includes(r.phase)).length
+    const sql = sub.rdvs.filter(r => ['SQL', 'Signée'].includes(r.phase)).length
+    const sig = sub.rdvs.filter(r => r.phase === 'Signée').length
+    return `📊 Vos taux de conversion :\n· RDV → MQL : ${Math.round((mql / total) * 100)} %\n· RDV → SQL : ${Math.round((sql / total) * 100)} %\n· SQL → Signature : ${sql ? Math.round((sig / sql) * 100) : 0} %`
+  }
+  if (t.includes('prévisionnel') || t.includes('previsionnel') || (t.includes('prime') && t.includes('venir'))) {
+    const PROBA = { R1: 0.25, R2: 0.4, MQL: 0.6 }
+    let total = 0
+    sub.rdvs.filter(r => r.opportunite === 'En cours' && PROBA[r.phase]).forEach(r => {
+      const eff = Number(r.effectif) || 0
+      const bar = sub.bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max) && (!b.leadSource || b.leadSource === r.source))
+        || sub.bareme.find(b => eff >= Number(b.min) && eff <= Number(b.max))
+      if (bar) total += (Number(bar.montant) || 0) * PROBA[r.phase]
+    })
+    return `🔮 Prévisionnel de primes sur vos opportunités en cours : ≈ ${Math.round(total)} € (pondéré par phase). Détail dans Primes & Commissions.`
+  }
+
   // Stats
   if (t.includes('sql')) {
     const n = sub.rdvs.filter(r => ['SQL', 'Signée'].includes(r.phase)).length
@@ -63,7 +108,7 @@ function runCommand(text, store) {
   if (t.includes('dashboard')) {
     return `📈 Pour créer ou modifier un dashboard : allez dans « Dashboard personnalisé » et décrivez ce que vous voulez, ou dites-moi par exemple « note : idée de dashboard... ». Vous pouvez aussi réorganiser les widgets via Paramètres → Widgets dashboard.`
   }
-  return `Je peux : créer un RDV (« crée un rdv avec Acme »), ajouter une note (« note : relancer Claire »), ajouter une catégorie de prime (« ajoute une prime de 250 pour 100 à 300 collaborateurs »), ou vous donner vos stats (SQL, MQL, primes, RDV).`
+  return `Je peux : créer un RDV (« crée un rdv avec Acme »), ajouter une note (« note : relancer Claire »), ajouter une catégorie de prime (« ajoute une prime de 250 pour 100 à 300 collaborateurs »), vous donner vos stats (SQL, MQL, primes, RDV), et répondre à des questions : « quel est mon meilleur canal ? », « quels leads relancer ? », « mes taux de conversion ? », « mon prévisionnel de primes ? ».`
 }
 
 export default function Chatbot() {
