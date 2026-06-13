@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { Plus, MoreVertical, ChevronRight, ChevronDown, Settings2, CornerDownRight, AlertTriangle, CalendarDays, Table as TableIcon, ChevronLeft } from 'lucide-react'
-import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, SOURCES, PHASE_COLORS, OPP_COLORS, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
+import { useStore, uid, todayISO, fmtDate, parseISO, applyRdvAutomations, rdvNeedsSqlDate, syncContacts, ensurePrimeSnapshot, findContactDuplicates, SOURCES, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor, RDV_FIELDS, inTimeline, companyKey } from '../store.jsx'
 import { Modal, Confirm, Field, Select, EditableSelect, Empty, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
 
@@ -75,9 +75,12 @@ function RdvForm({ initial, title, onSave, onClose, sub, setSubList, isCreate, f
         {visible('dateRdv') && <Field label="Date du RDV">
           <input type="date" className="input" value={f.dateRdv} onChange={e => set('dateRdv', e.target.value)} />
         </Field>}
-        <Field label="Date de passage en SQL">
-          <input type="date" className="input" value={f.datePassageSQL} onChange={e => set('datePassageSQL', e.target.value)} />
-        </Field>
+        {/* Champ affiché seulement si pertinent : phase SQL/Signée ou opportunité Gagnée/Signée (micro 8) */}
+        {(['SQL', 'Signée'].includes(f.phase) || ['Gagnée', 'Signée'].includes(f.opportunite) || f.datePassageSQL) && (
+          <Field label="Date de passage en SQL">
+            <input type="date" className="input" value={f.datePassageSQL} onChange={e => set('datePassageSQL', e.target.value)} />
+          </Field>
+        )}
         {f.opportunite === 'Perdue' && <Field label="Motif de la perte">
           <EditableSelect value={f.motifKo || ''} onChange={v => set('motifKo', v)} options={sub.lostReasons || []}
             onOptionsChange={o => setSubList('lostReasons', o)} label="motifs" />
@@ -154,7 +157,7 @@ const dayISO = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,
 function RdvPill({ r, onOpen, full }) {
   return (
     <button onClick={() => onOpen(r)} title={`${r.entreprise} — ${r.phase}`}
-      className={`block w-full truncate text-left font-semibold rounded px-1.5 py-0.5 mt-0.5 ${full ? 'text-xs' : 'text-[10px]'} ${PHASE_COLORS[r.phase] || 'bg-card text-ink'}`}>
+      className={`block w-full truncate text-left font-semibold rounded px-1.5 py-0.5 mt-0.5 ${full ? 'text-xs' : 'text-[10px]'} ${phaseColor(r.phase)}`}>
       {r.entreprise}{full ? ` · ${r.phase}` : ''}
     </button>
   )
@@ -203,7 +206,7 @@ function CalendarView({ rdvs, onOpen }) {
         return list.length === 0 ? <Empty text="Aucun rendez-vous ce jour." /> : (
           <div className="space-y-1.5">{list.map(r => (
             <button key={r.id} onClick={() => onOpen(r)} className="w-full card !rounded-xl p-3 text-left hover:bg-surface flex items-center gap-3 flex-wrap">
-              <span className={`chip ${PHASE_COLORS[r.phase] || 'bg-surface'}`}>{r.phase}</span>
+              <span className={`chip ${phaseColor(r.phase)}`}>{r.phase}</span>
               <span className="font-bold text-sm">{r.entreprise}</span>
               <span className="text-xs text-muted">{(r.contacts || []).map(c => c.nom).filter(Boolean).join(', ')}</span>
             </button>
@@ -286,6 +289,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   const [confirmDel, setConfirmDel] = useState(null)
   const [sqlAsk, setSqlAsk] = useState(null) // {rdvId, patch, date}
   const [motifAsk, setMotifAsk] = useState(null) // {rdvId, kind: 'ko'|'noshow', value} — rappel non bloquant
+  const [dupConfirm, setDupConfirm] = useState(null) // {data, mode, id, dups} — validation anti-doublon
   const [openGroups, setOpenGroups] = useState({})
   const [menuFor, setMenuFor] = useState(null)
   const [fieldsModal, setFieldsModal] = useState(false)
@@ -307,13 +311,35 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingNote])
 
-  const setSubList = (key, list) => store.setSub(d => ({ ...d, [key]: list }))
+  // Empêche la suppression d'une valeur (phase/provenance/statut) encore utilisée par un RDV (micro 13)
+  const usageField = { phases: 'phase', provenances: 'provenance', opportunites: 'opportunite' }
+  const setSubList = (key, list) => {
+    const field = usageField[key]
+    if (field) {
+      const removed = (sub[key] || []).filter(v => !list.includes(v))
+      const stillUsed = removed.filter(v => sub.rdvs.some(r => r[field] === v))
+      if (stillUsed.length) {
+        toast(`Impossible de supprimer « ${stillUsed.join(', ')} » : valeur encore utilisée par des rendez-vous.`)
+        list = [...list, ...stillUsed]
+      }
+    }
+    store.setSub(d => ({ ...d, [key]: list }))
+  }
   const visible = (k) => sub.fieldsConfig.find(c => c.key === k)?.visible !== false
 
   const saveRdv = (data, mode, id) => {
     // Canonise la casse du nom d'entreprise sur la première variante connue (évite les doublons kanban).
     const existing = sub.rdvs.find(r => companyKey(r.entreprise) === companyKey(data.entreprise))
     if (existing && existing.entreprise !== data.entreprise) data = { ...data, entreprise: existing.entreprise }
+    // Validation anti-doublon de contact (bug 3) : on demande confirmation avant de fusionner/ajouter.
+    if (mode === 'create' || mode === 'sub') {
+      const dups = findContactDuplicates(sub, { ...data, entreprise: data.entreprise })
+      if (dups.length && !data.__dupConfirmed) {
+        setDupConfirm({ data, mode, id, dups })
+        return
+      }
+    }
+    if (data.__dupConfirmed) { const { __dupConfirmed, ...clean } = data; data = clean }
     store.setSub(d => {
       if (mode === 'create' || mode === 'sub') {
         const rdv = {
@@ -385,19 +411,23 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
   }
 
   // ---- filtrage / tri
+  // Prédicat appliqué à un RDV unitaire (réutilisé pour la racine ET les sous-RDV — micro 12)
+  const rdvMatches = (x) =>
+    (!fPhase || x.phase === fPhase) &&
+    (!fSource || x.source === fSource) &&
+    (!fOpp || x.opportunite === fOpp) &&
+    (!fPoste || (x.contacts || []).some(c => c.poste === fPoste)) &&
+    (!fProv || x.provenance === fProv) &&
+    (sort !== 'date-custom' || inTimeline(x.dateRdv, 'custom', dateCustom))
+  const anyFilter = fPhase || fSource || fOpp || fPoste || fProv || sort === 'date-custom'
+  // Renvoie les sous-RDV à afficher (filtrés si un filtre est actif)
+  const childrenOf = (r) => {
+    const kids = sub.rdvs.filter(x => x.parentId === r.id)
+    return anyFilter ? kids.filter(rdvMatches) : kids
+  }
   const roots = useMemo(() => {
     let list = sub.rdvs.filter(r => !r.parentId)
-    const matches = (r) => {
-      const fam = [r, ...sub.rdvs.filter(x => x.parentId === r.id)]
-      return fam.some(x =>
-        (!fPhase || x.phase === fPhase) &&
-        (!fSource || x.source === fSource) &&
-        (!fOpp || x.opportunite === fOpp) &&
-        (!fPoste || (x.contacts || []).some(c => c.poste === fPoste)) &&
-        (!fProv || x.provenance === fProv) &&
-        (sort !== 'date-custom' || inTimeline(x.dateRdv, 'custom', dateCustom))
-      )
-    }
+    const matches = (r) => [r, ...sub.rdvs.filter(x => x.parentId === r.id)].some(rdvMatches)
     list = list.filter(matches)
     const cmp = {
       'date-desc': (a, b) => (b.dateRdv || '').localeCompare(a.dateRdv || ''),
@@ -430,13 +460,13 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
         <Select value={r.source} onChange={v => patchRdv(r, { source: v })} options={SOURCES} className="!w-auto !py-1 text-xs" />
       </td>}
       {visible('phase') && <td>
-        <select className={`chip border-0 cursor-pointer ${PHASE_COLORS[r.phase] || 'bg-surface text-ink'}`} value={r.phase}
+        <select className={`chip border-0 cursor-pointer ${phaseColor(r.phase)}`} value={r.phase}
           onChange={e => patchRdv(r, { phase: e.target.value })}>
           {sub.phases.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
       </td>}
       {visible('opportunite') && <td>
-        <select className={`chip border-0 cursor-pointer ${OPP_COLORS[r.opportunite] || 'bg-surface text-ink'}`} value={r.opportunite}
+        <select className={`chip border-0 cursor-pointer ${oppColor(r.opportunite)}`} value={r.opportunite}
           onChange={e => patchRdv(r, { opportunite: e.target.value })}>
           {sub.opportunites.map(p => <option key={p} value={p}>{p}</option>)}
         </select>
@@ -535,7 +565,7 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           <tbody>
             {roots.length === 0 && <tr><td colSpan={colCount}><Empty text="Aucun rendez-vous. Cliquez sur « Créer un RDV »." /></td></tr>}
             {roots.map(r => {
-              const children = sub.rdvs.filter(x => x.parentId === r.id)
+              const children = childrenOf(r)
               return (
                 <React.Fragment key={r.id}>
                   <Row r={r} childCount={children.length} />
@@ -590,6 +620,25 @@ export default function Rdv({ pendingNote, onPendingNoteUsed }) {
           </Modal>
         )
       })()}
+
+      {dupConfirm && (
+        <Modal title="Contact déjà existant" onClose={() => setDupConfirm(null)}>
+          <p className="text-sm text-muted mb-3">Un ou plusieurs contacts de ce rendez-vous existent déjà dans votre répertoire :</p>
+          <ul className="space-y-1 mb-4">
+            {dupConfirm.dups.map((d, i) => (
+              <li key={i} className="text-sm p-2 rounded-lg bg-surface">
+                <b>{d.incoming.nom || d.incoming.email}</b>
+                <span className="text-muted"> — déjà présent{d.existing.entreprise ? ` chez ${d.existing.entreprise}` : ''}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-xs text-muted mb-4">En confirmant, la fiche existante sera mise à jour avec les nouvelles informations (aucun doublon créé).</p>
+          <div className="flex justify-end gap-2">
+            <button className="btn-ghost" onClick={() => setDupConfirm(null)}>Annuler</button>
+            <button className="btn-primary" onClick={() => { const c = dupConfirm; setDupConfirm(null); saveRdv({ ...c.data, __dupConfirmed: true }, c.mode, c.id) }}>Confirmer l'ajout</button>
+          </div>
+        </Modal>
+      )}
 
       {motifAsk && (
         <Modal title={motifAsk.kind === 'ko' ? 'Motif de la perte (recommandé)' : 'Raison du no-show (recommandé)'} onClose={() => setMotifAsk(null)}>

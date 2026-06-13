@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { TrendingUp, Sun, AlertTriangle, ArrowRightLeft } from 'lucide-react'
-import { useStore, inTimeline, computePrimes, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, PHASE_COLORS } from '../store.jsx'
+import { useStore, inTimeline, computePrimes, parseISO, fmtDate, monthKey, todayISO, uid, syncContacts, fmtMoney, PHASE_COLORS, phaseColor } from '../store.jsx'
 import { Empty, toast } from '../ui.jsx'
 
 const dayISO = (offset = 0) => {
@@ -119,7 +119,7 @@ export default function TeamLead() {
                   <td>{s.prisMois}{goalMois ? <span className="text-xs text-muted"> / {goalMois}</span> : ''}</td>
                   <td className="font-bold">{s.projection}</td>
                   <td>{s.sqlMois}{s.goals.sqlMois ? <span className="text-xs text-muted"> / {s.goals.sqlMois}</span> : ''}</td>
-                  <td>{s.primesMois} €</td>
+                  <td>{fmtMoney(s.primesMois)}</td>
                   <td>{onTrack === null ? <span className="chip bg-surface text-muted">pas d'objectif</span>
                     : onTrack ? <span className="chip bg-emerald-100 text-emerald-700">✓ en bonne voie</span>
                     : <span className="chip bg-red-100 text-red-700">⚠ en retard</span>}</td>
@@ -131,7 +131,7 @@ export default function TeamLead() {
               <td>{team.pris}{team.goalPris ? <span className="text-xs text-muted font-normal"> / {team.goalPris}</span> : ''}</td>
               <td>{team.proj}</td>
               <td>{team.sql}{team.goalSql ? <span className="text-xs text-muted font-normal"> / {team.goalSql}</span> : ''}</td>
-              <td>{team.primes} €</td>
+              <td>{fmtMoney(team.primes)}</td>
               <td>{team.goalPris ? (team.proj >= team.goalPris
                 ? <span className="chip bg-emerald-100 text-emerald-700">✓ quota atteignable</span>
                 : <span className="chip bg-red-100 text-red-700">⚠ {Math.max(0, team.goalPris - team.proj)} RDV manquants</span>) : null}</td>
@@ -183,7 +183,7 @@ export default function TeamLead() {
               <label key={r.id} className="flex items-center gap-2 text-sm p-2 rounded-lg hover:bg-surface cursor-pointer">
                 <input type="checkbox" checked={picked.has(r.id)}
                   onChange={e => setPicked(p => { const n = new Set(p); e.target.checked ? n.add(r.id) : n.delete(r.id); return n })} />
-                <span className={`chip ${PHASE_COLORS[r.phase] || 'bg-surface'}`}>{r.phase}</span>
+                <span className={`chip ${phaseColor(r.phase)}`}>{r.phase}</span>
                 <span className="font-semibold">{r.entreprise}</span>
                 <span className="text-xs text-muted">RDV {fmtDate(r.dateRdv)} · {r.opportunite}</span>
               </label>

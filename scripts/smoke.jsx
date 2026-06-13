@@ -30,7 +30,9 @@ async function main() {
   const { createRoot } = await import('react-dom/client')
   const { Simulate } = await import('react-dom/test-utils')
   const { StoreProvider } = await import('../src/store.jsx')
+  const { I18nProvider } = await import('../src/i18n.jsx')
   const { default: App } = await import('../src/App.jsx')
+  const Root = (children) => React.createElement(StoreProvider, null, React.createElement(I18nProvider, null, children))
 
   const errors = []
   const origError = console.error
@@ -41,8 +43,7 @@ async function main() {
   const root = createRoot(container)
 
   await act(async () => {
-    root.render(React.createElement(React.StrictMode, null,
-      React.createElement(StoreProvider, null, React.createElement(App))))
+    root.render(React.createElement(React.StrictMode, null, Root(React.createElement(App))))
   })
 
   const text = () => container.textContent || ''
@@ -61,7 +62,7 @@ async function main() {
   await click(find('button', 'Se connecter'))
 
   // 2. Écran de bienvenue
-  if (!text().includes('Bienvenue OwenMtp')) throw new Error('Welcome screen missing: ' + text().slice(0, 300))
+  if (!text().includes('Bienvenue Owen')) throw new Error('Welcome screen missing: ' + text().slice(0, 300))
   await act(async () => { await new Promise(r => setTimeout(r, 2800)) })
 
   // 3. Choix de l'environnement (PeopleSpheres + environnement de démo Test)
@@ -126,7 +127,7 @@ async function main() {
   win.document.body.appendChild(c2)
   const root2 = createRoot(c2)
   await act(async () => {
-    root2.render(React.createElement(StoreProvider, null, React.createElement(App)))
+    root2.render(Root(React.createElement(App)))
   })
   await act(async () => { await new Promise(r => setTimeout(r, 1700)) }) // splash
   const inputs2 = c2.querySelectorAll('input')
@@ -141,4 +142,4 @@ async function main() {
   console.log('SMOKE OK — all screens rendered without errors')
 }
 
-main().then(() => process.exit(0), (e) => { console.error('SMOKE FAILED:', e.message); process.exit(1) })
+main().then(() => process.exit(0), (e) => { console.error("SMOKE FAILED:", e.stack || e.message); process.exit(1) })

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Building2, Globe, MapPin, Linkedin, Euro, CalendarDays, Users, StickyNote, MessageSquare, Send, Trash2 } from 'lucide-react'
-import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS } from '../store.jsx'
+import { useStore, fmtDate, PHASE_COLORS, OPP_COLORS, phaseColor, oppColor } from '../store.jsx'
 import { Modal, Field, Empty } from '../ui.jsx'
 
 // Ouvre la fiche entreprise depuis n'importe quelle page (événement global).
@@ -136,8 +136,8 @@ export default function CompanyModal() {
             <div className="space-y-1.5">
               {rdvs.map(r => (
                 <div key={r.id} className="flex items-center gap-2 text-sm p-2 rounded-lg bg-surface flex-wrap">
-                  <span className={`chip ${PHASE_COLORS[r.phase] || 'bg-card'}`}>{r.phase}</span>
-                  <span className={`chip ${OPP_COLORS[r.opportunite] || 'bg-card'}`}>{r.opportunite}</span>
+                  <span className={`chip ${phaseColor(r.phase)}`}>{r.phase}</span>
+                  <span className={`chip ${oppColor(r.opportunite)}`}>{r.opportunite}</span>
                   <span className="text-muted text-xs">RDV : {fmtDate(r.dateRdv)} · pris le {fmtDate(r.datePriseRdv)}</span>
                   {r.notes && <span className="text-xs text-muted truncate max-w-[16rem]" title={r.notes}>📝 {r.notes}</span>}
                 </div>

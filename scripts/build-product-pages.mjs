@@ -26,6 +26,17 @@ const CATS = [
       shots: [['dashboard', 'The dashboard: booked / held meetings, MQL, SQL, bonuses, performance gauges — reorderable widgets.'], ['teamlead', 'Team steering: monthly forecast with projection, daily standup and automatic drift alerts.']],
       feats: ['Full dashboards with timelines and drill-down', 'Goals & quotas with progress bars', 'Periodic reports exportable to PDF', 'Pipeline velocity and bottleneck detection', 'AI prompt-built dashboards', 'Full-screen presentation mode'],
     },
+    es: {
+      name: 'Dirección', title: 'Tus cifras deciden, no tu intuición',
+      pitch: 'Cada cita, cada SQL, cada euro de prima alimenta paneles legibles de un vistazo. Líneas de tiempo flexibles, detalle en cada cifra, informes listos para tu 1:1 — BD Report convierte tu actividad en decisiones.',
+      points: [
+        ['Todo es clicable', 'Una cifra te intriga? Haz clic: aparece la lista de citas detrás, filtrada por el periodo mostrado.'],
+        ['Objetivos que viven', 'Cuotas semanales y mensuales con barras de progreso y aviso de retraso — cada mañana sabes dónde estás.'],
+        ['El informe listo para presentar', 'Semanal, mensual, trimestral o anual: tus 6 indicadores con variación vs el periodo anterior, exportables a PDF.'],
+      ],
+      shots: [['dashboard', 'El panel: citas concertadas / realizadas, MQL, SQL, primas, indicadores de rendimiento — widgets reorganizables.'], ['teamlead', 'Dirección de equipo: previsión del mes con proyección, daily standup y alertas de desvío automáticas.']],
+      feats: ['Paneles completos con líneas de tiempo y detalle', 'Objetivos y cuotas con barras de progreso', 'Informes periódicos exportables a PDF', 'Velocidad del pipeline y cuellos de botella', 'Paneles generados por prompt de IA', 'Modo presentación a pantalla completa'],
+    },
   },
   {
     slug: 'activite', emoji: '📅',
@@ -50,6 +61,17 @@ const CATS = [
       ],
       shots: [['rdv', 'Meetings: every field, filter and sort, follow-ups nested under their parent.'], ['calendar', 'The multi-view calendar: day, week, month, year — colored by stage.'], ['tasks', 'Priority tasks: no-shows, open opportunities, leads to revive.']],
       feats: ['Full meetings with multiple contacts and configurable fields', 'Day / week / month / year calendar', 'Automatic priority tasks', 'Stage and status automations', 'Guided loss and no-show reasons', 'Built-in natural-language assistant'],
+    },
+    es: {
+      name: 'Actividad', title: 'Tu día de prospección, sin fricción',
+      pitch: 'Crear una cita lleva 20 segundos, su seguimiento 5. Citas de seguimiento prerellenadas, automatizaciones de fases, calendario multivista y tareas priorizadas: BD Report quita lo administrativo para dejarte al teléfono.',
+      points: [
+        ['La cita inteligente', 'Varios contactos, LinkedIn, sector, notas — y la cita siguiente se prerellena sola. Los duplicados se detectan antes de existir.'],
+        ['Automatizaciones de negocio', 'Ganada → SQL, Perdida → KO con motivo, fecha de SQL pedida en el momento justo: datos limpios sin esfuerzo.'],
+        ['Tu to-do ordenada por impacto', 'No-shows a reprogramar, oportunidades a impulsar, leads perdidos a recuperar tras 6 meses: la página Tareas prioritarias piensa por ti.'],
+      ],
+      shots: [['rdv', 'Mis Citas: todos los campos, filtros y orden, seguimientos anidados bajo su cita padre.'], ['calendar', 'El calendario multivista: día, semana, mes, año — coloreado por fase.'], ['tasks', 'Tareas prioritarias: no-shows, oportunidades abiertas, leads a recuperar.']],
+      feats: ['Citas completas con varios contactos y campos configurables', 'Calendario día / semana / mes / año', 'Tareas prioritarias automáticas', 'Automatizaciones de fases y estados', 'Motivos de pérdida y de no-show guiados', 'Asistente integrado en lenguaje natural'],
     },
   },
   {
@@ -76,6 +98,17 @@ const CATS = [
       shots: [['leads', 'The company pipeline: the shared organization view, with owner and comments.'], ['company', 'The account page: meetings, contacts, company info and the team comment thread.']],
       feats: ['Company kanban with no duplicates, touch drag & drop', 'Lead lifetime timeline stage by stage', 'Duplicate and account-conflict alerts', 'Enrichable 360° account view', 'Ctrl+K global search', 'Auto-fed contacts with imports/exports'],
     },
+    es: {
+      name: 'Pipeline', title: 'Un kanban que dice la verdad',
+      pitch: 'Una tarjeta por empresa — nunca un duplicado. Arrastra, suelta, y las fases se actualizan solas. La línea de vida de cada lead muestra dónde se atasca, y la alerta de conflicto evita que llames a la cuenta de un compañero.',
+      points: [
+        ['Por empresa, no por cita', 'Tres citas en la misma empresa = una sola tarjeta, con historial fusionado. Tu pipeline refleja la realidad comercial.'],
+        ['La ficha 360°', 'Todas las citas, contactos, notas y comentarios de equipo de una cuenta en una página, enriquecible (facturación, web, LinkedIn, ubicación).'],
+        ['Cero colisiones', 'Si un compañero ya trabaja la empresa que escribes, BD Report te avisa al instante — con sus comentarios destacados.'],
+      ],
+      shots: [['leads', 'El pipeline de empresa: la vista compartida de toda la organización, con propietario y comentarios.'], ['company', 'La ficha de cuenta: citas, contactos, datos de empresa y el hilo de comentarios de equipo.']],
+      feats: ['Kanban por empresa sin duplicados, drag & drop táctil', 'Línea de vida del lead fase por fase', 'Alertas de duplicado y conflicto de cuentas', 'Ficha de cuenta 360° enriquecible', 'Búsqueda global Ctrl+K', 'Contactos autoalimentados con importaciones/exportaciones'],
+    },
   },
   {
     slug: 'remuneration', emoji: '💶',
@@ -100,6 +133,17 @@ const CATS = [
       ],
       shots: [['primes', 'Bonuses & commissions: visual tracking, detailed reporting, editable grid and weighted forecast.']],
       feats: ['Configurable grid: headcount brackets × lead source', 'Versioned bonuses, frozen at SQL', 'Automatic 15th rule', 'Stage-weighted forecast', 'Visual tracking by payout month', 'Sources × headcount analytics'],
+    },
+    es: {
+      name: 'Remuneración', title: 'Tus primas, calculadas al céntimo y grabadas en piedra',
+      pitch: 'El baremo es configurable (tramos de plantilla × fuente), la regla del 15 es automática, y cada prima se congela con el baremo vigente al pasar a SQL. Se acabaron las discusiones de fin de mes con contabilidad.',
+      points: [
+        ['La regla del 15, sin cálculos', 'SQL antes del 15: se paga este mes. Después: el mes siguiente. BD Report clasifica cada prima en el mes correcto, solo.'],
+        ['El pasado no cambia', 'Cambiar el baremo en marzo no reescribe las primas de enero: cada prima se versiona en su fecha de SQL.'],
+        ['Ver venir el dinero', 'La previsión pondera tus oportunidades abiertas por su probabilidad de fase: sabes lo que el próximo mes puede aportar.'],
+      ],
+      shots: [['primes', 'Primas y comisiones: seguimiento gráfico, informe detallado, baremo editable y previsión ponderada.']],
+      feats: ['Baremo configurable: tramos de plantilla × fuente', 'Primas versionadas, congeladas al pasar a SQL', 'Regla del 15 automática', 'Previsión ponderada por fase', 'Seguimiento gráfico por mes de pago', 'Reparto analítico fuentes × plantilla'],
     },
   },
   {
@@ -126,6 +170,17 @@ const CATS = [
       shots: [['teamlead', 'Team steering: forecast, standup, alerts and reassignment.'], ['orgchart', 'The hierarchical org chart: managers and teams, with photos.'], ['company', 'The team comment thread with @mentions on every account.']],
       feats: ['Read-only shared company pipeline', 'Comments & @mentions with notifications', 'Team steering: forecast, standup, alerts', 'Logged lead reassignment', 'Hierarchical org chart', 'Roles and per-brick permissions'],
     },
+    es: {
+      name: 'Colaboración', title: 'El equipo por fin juega en el mismo campo',
+      pitch: 'Pipeline compartido en lectura para todos, comentarios y @menciones en las cuentas, dirección de manager con previsión y standup, reasignación de leads en 3 clics: BD Report hace que el equipo funcione como una sola máquina.',
+      points: [
+        ['Quién trabaja qué, visible', 'El pipeline de empresa agrega las cuentas de toda la organización con su propietario — los conflictos se ven antes de ocurrir.'],
+        ['Conversaciones que perduran', 'Los comentarios viven en la ficha de la cuenta, no en un chat que se desplaza. Menciona a @Sara: recibe aviso en su espacio.'],
+        ['El manager equipado', 'Previsión con proyección de fin de mes, daily standup en 30 segundos, alertas de desvío automáticas y reasignación trazada.'],
+      ],
+      shots: [['teamlead', 'Dirección de equipo: previsión, standup, alertas y reasignación.'], ['orgchart', 'El organigrama jerárquico: managers y equipos, con fotos.'], ['company', 'El hilo de comentarios de equipo con @menciones en cada cuenta.']],
+      feats: ['Pipeline de empresa compartido en lectura', 'Comentarios y @menciones con avisos', 'Dirección de equipo: previsión, standup, alertas', 'Reasignación de leads trazada', 'Organigrama jerárquico', 'Roles y permisos por módulos'],
+    },
   },
   {
     slug: 'donnees', emoji: '🗄️',
@@ -150,6 +205,17 @@ const CATS = [
       ],
       shots: [['contacts', 'Contacts: search, filters, selection, CSV and Excel exports.'], ['logs', 'Audit logs: every action timestamped, filterable by task and period.']],
       feats: ['Sealed multi-environments protected by PIN', 'Filterable audit logs', '30-day restorable trash', 'JSON backup & restore', '20 themes including 10 animated moods', 'Installable PWA, works offline'],
+    },
+    es: {
+      name: 'Datos', title: 'Tus datos comerciales, limpios y bajo control',
+      pitch: 'Contactos autoalimentados en cada cita, exportaciones CSV y Excel filtradas, registros de auditoría fechados, papelera de 30 días y copia completa: tus datos son un activo y BD Report los trata como tal.',
+      points: [
+        ['Una agenda que se llena sola', 'Cada contacto de una cita entra automáticamente en Mis contactos, sin duplicar. Importa CSV, exporta CSV/Excel — filtrado o completo.'],
+        ['Todo queda trazado', 'Creación, edición, eliminación, paso a SQL, reasignación: cada acción queda fechada en los registros, filtrables por tarea y fecha.'],
+        ['Nada se pierde', 'Borrado accidental? La papelera lo guarda 30 días. Necesitas migrar? La copia JSON se lo lleva todo.'],
+      ],
+      shots: [['contacts', 'Contactos: búsqueda, filtros, selección, exportaciones CSV y Excel.'], ['logs', 'Registros de auditoría: cada acción fechada, filtrable por tarea y periodo.']],
+      feats: ['Multientorno estanco protegido con PIN', 'Registros de auditoría filtrables', 'Papelera restaurable 30 días', 'Copia y restauración JSON', '20 temas incluidos 10 ambientes animados', 'PWA instalable, funciona sin conexión'],
     },
   },
 ]
@@ -223,6 +289,7 @@ footer{border-top:1px solid var(--line);padding:22px 0;font-size:13.5px;color:va
       <button class="lang-btn" id="langBtn" onclick="toggleLang()">🇬🇧 EN</button>
       <a class="btn btn-primary" href="../app/" data-i18n="nav.login">Se connecter</a>
     </div>
+    <!-- prod page nav -->
   </div>
 </nav>
 <div class="cat-tabs"><div class="wrap">${navProduct(cat.slug)}</div></div>
@@ -262,26 +329,41 @@ footer{border-top:1px solid var(--line);padding:22px 0;font-size:13.5px;color:va
 </div></footer>
 
 <script>
-const EN = ${JSON.stringify({
-  'nav.pricing': 'Pricing', 'nav.contact': 'Contact', 'nav.login': 'Log in',
-  'hero.cat': cat.en.name, 'hero.title': cat.en.title, 'hero.pitch': cat.en.pitch,
-  ...Object.fromEntries(cat.en.points.flatMap((p, i) => [[`pt.${i}.t`, p[0]], [`pt.${i}.d`, p[1]]])),
-  ...Object.fromEntries(cat.en.shots.map((s, i) => [`shot.${i}`, s[1]])),
-  ...Object.fromEntries(cat.en.feats.map((f, i) => [`ft.${i}`, f])),
-  'sec.feats': 'Everything this brick includes',
-  'cta.title': 'Try BD Report today', 'cta.sub': 'Join the exclusive beta — limited seats.', 'cta.btn': 'Log in to my workspace',
-  'foot.back': '← Back to the site',
-  ...Object.fromEntries(CATS.map(c => [`cat.${c.slug}`, c.en.name])),
-}, null, 0)}
+const DICTS = {
+  en: ${JSON.stringify({
+    'nav.pricing': 'Pricing', 'nav.contact': 'Contact', 'nav.login': 'Log in',
+    'hero.cat': cat.en.name, 'hero.title': cat.en.title, 'hero.pitch': cat.en.pitch,
+    ...Object.fromEntries(cat.en.points.flatMap((p, i) => [[`pt.${i}.t`, p[0]], [`pt.${i}.d`, p[1]]])),
+    ...Object.fromEntries(cat.en.shots.map((s, i) => [`shot.${i}`, s[1]])),
+    ...Object.fromEntries(cat.en.feats.map((f, i) => [`ft.${i}`, f])),
+    'sec.feats': 'Everything this brick includes',
+    'cta.title': 'Try BD Report today', 'cta.sub': 'Join the exclusive beta — limited seats.', 'cta.btn': 'Log in to my workspace',
+    'foot.back': '← Back to the site',
+    ...Object.fromEntries(CATS.map(c => [`cat.${c.slug}`, c.en.name])),
+  }, null, 0)},
+  es: ${JSON.stringify({
+    'nav.pricing': 'Precios', 'nav.contact': 'Contacto', 'nav.login': 'Iniciar sesión',
+    'hero.cat': cat.es.name, 'hero.title': cat.es.title, 'hero.pitch': cat.es.pitch,
+    ...Object.fromEntries(cat.es.points.flatMap((p, i) => [[`pt.${i}.t`, p[0]], [`pt.${i}.d`, p[1]]])),
+    ...Object.fromEntries(cat.es.shots.map((s, i) => [`shot.${i}`, s[1]])),
+    ...Object.fromEntries(cat.es.feats.map((f, i) => [`ft.${i}`, f])),
+    'sec.feats': 'Todo lo que incluye este módulo',
+    'cta.title': 'Prueba BD Report hoy mismo', 'cta.sub': 'Únete a la beta exclusiva — plazas limitadas.', 'cta.btn': 'Entrar a mi espacio',
+    'foot.back': '← Volver al sitio',
+    ...Object.fromEntries(CATS.map(c => [`cat.${c.slug}`, c.es.name])),
+  }, null, 0)},
+}
+const SEQ = ['fr', 'en', 'es'], BTN = { fr: '🇬🇧 EN', en: '🇪🇸 ES', es: '🇫🇷 FR' }
 let lang = localStorage.getItem('bdr_site_lang') || 'fr'
 const FR = {}
 document.querySelectorAll('[data-i18n]').forEach(el => FR[el.dataset.i18n] = el.innerHTML)
 function applyLang(){
   document.documentElement.lang = lang
-  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = lang === 'fr' ? FR[el.dataset.i18n] : (EN[el.dataset.i18n] ?? FR[el.dataset.i18n]) })
-  document.getElementById('langBtn').textContent = lang === 'fr' ? '🇬🇧 EN' : '🇫🇷 FR'
+  const d = DICTS[lang]
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.innerHTML = lang === 'fr' ? FR[el.dataset.i18n] : ((d && d[el.dataset.i18n]) ?? FR[el.dataset.i18n]) })
+  document.getElementById('langBtn').textContent = BTN[lang]
 }
-function toggleLang(){ lang = lang === 'fr' ? 'en' : 'fr'; localStorage.setItem('bdr_site_lang', lang); applyLang() }
+function toggleLang(){ lang = SEQ[(SEQ.indexOf(lang) + 1) % SEQ.length]; localStorage.setItem('bdr_site_lang', lang); applyLang() }
 applyLang()
 </script>
 </body>
