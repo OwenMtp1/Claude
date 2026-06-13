@@ -4,10 +4,12 @@ import { useStore, PROJECT_PHASES, PROJECT_PHASE_COLORS, PROJECT_STATUSES, uid, 
 import { Modal, Field, Empty, Confirm, toast } from '../ui.jsx'
 
 const DAY = 86400000
-const toDate = (s) => s ? new Date(s + 'T00:00:00') : null
+// Dates manipulées en UTC pour rester stables quel que soit le fuseau du navigateur
+// (sinon addDays via toISOString peut ne pas avancer et figer le calendrier — bug planté).
+const toDate = (s) => s ? new Date(s + 'T00:00:00Z') : null
 const dayDiff = (a, b) => Math.round((toDate(b) - toDate(a)) / DAY)
-const addDays = (s, n) => { const d = toDate(s); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
-const fmtShort = (s) => s ? toDate(s).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' }) : '—'
+const addDays = (s, n) => { const d = toDate(s); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+const fmtShort = (s) => s ? toDate(s).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', timeZone: 'UTC' }) : '—'
 const MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.']
 
 function defaultPhases() {
@@ -43,11 +45,13 @@ function Gantt({ projects, onEdit }) {
   // Segments de mois pour l'en-tête
   const months = []
   let c = min
-  while (c <= max) {
+  let guard = 0
+  while (c <= max && guard++ < 600) {
     const d = toDate(c)
-    const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10)
+    const y = d.getUTCFullYear(), m = d.getUTCMonth()
+    const monthEnd = new Date(Date.UTC(y, m + 1, 0)).toISOString().slice(0, 10)
     const segEnd = monthEnd < max ? monthEnd : max
-    months.push({ label: `${MONTHS[d.getMonth()]} ${d.getFullYear()}`, days: dayDiff(c, segEnd) + 1 })
+    months.push({ label: `${MONTHS[m]} ${y}`, days: dayDiff(c, segEnd) + 1 })
     c = addDays(segEnd, 1)
   }
 
