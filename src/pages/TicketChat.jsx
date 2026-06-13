@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Send, ImagePlus, X } from 'lucide-react'
-import { useStore } from '../store.jsx'
+import { useStore, ticketHasUnread } from '../store.jsx'
 import { LogoMark } from '../Brand.jsx'
 import { toast } from '../ui.jsx'
 
@@ -33,7 +33,12 @@ export default function TicketChat({ ticket, role }) {
   const mySide = role // 'user' | 'support'
   const otherSide = role === 'user' ? 'support' : 'user'
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [ticket.messages.length])
+  useEffect(() => { endRef.current?.scrollIntoView?.({ behavior: 'smooth' }) }, [ticket.messages.length])
+
+  // La conversation est ouverte : on marque les nouveaux messages comme lus pour effacer la pastille rouge.
+  useEffect(() => {
+    if (ticketHasUnread(ticket, mySide)) store.markTicketRead(ticket.id, mySide)
+  }, [ticket.id, ticket.messages.length, mySide])
 
   // Re-rendu périodique pour faire expirer l'indicateur de saisie de l'autre partie.
   const [, forceTick] = useState(0)

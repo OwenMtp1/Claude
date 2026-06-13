@@ -2,9 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban,
 } from 'lucide-react'
-import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES } from './store.jsx'
+import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
 import { useT, LANGS } from './i18n.jsx'
 import { THEMES, applyTheme } from './themes.js'
@@ -28,6 +28,9 @@ import TeamLead from './pages/TeamLead.jsx'
 import Support from './pages/Support.jsx'
 import Requests from './pages/Requests.jsx'
 import Tickets from './pages/Tickets.jsx'
+import Clients from './pages/Clients.jsx'
+import Projects from './pages/Projects.jsx'
+import SupportTrash from './pages/SupportTrash.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -321,6 +324,9 @@ const NAV_GROUPS = [
     id: 'supportbdr', label: 'Support Client BD Report', items: [
       { id: 'requests', label: 'Nouvelles demandes', icon: Inbox, roles: SUPPORT_ROLES },
       { id: 'tickets', label: 'Tickets Techniques', icon: LifeBuoy, roles: SUPPORT_ROLES },
+      { id: 'clients', label: 'Clients', icon: Users2, roles: SUPPORT_ROLES },
+      { id: 'projects', label: 'Gestion de Projet', icon: FolderKanban, roles: SUPPORT_ROLES },
+      { id: 'supporttrash', label: 'Corbeille', icon: Trash2, roles: SUPPORT_ROLES },
     ],
   },
   {
@@ -348,6 +354,15 @@ function MainApp() {
 
   const themeObj = THEMES.find(t => t.id === (store.sub?.theme || theme)) || THEMES[0]
 
+  // Pastilles « nouveaux messages » : côté client (mes tickets) et côté support (tous les tickets).
+  const isSupportUser = SUPPORT_ROLES.includes(me.role)
+  const myTickets = (store.db.tickets || []).filter(t => t.userAccountId === me.id)
+  const badges = {
+    support: myTickets.filter(t => ticketHasUnread(t, 'user')).length,
+    tickets: isSupportUser ? (store.db.tickets || []).filter(t => ticketHasUnread(t, 'support')).length : 0,
+    requests: isSupportUser ? (store.db.supportRequests || []).filter(r => !r.archived && r.status === 'new').length : 0,
+  }
+
   const myBricks = allowedBricks(me) // briques permises par l'offre (Starter limité / Beta complet)
   const canSee = (item) => {
     if (item.roles && !item.roles.includes(me.role)) return false
@@ -360,6 +375,13 @@ function MainApp() {
   const [booting, setBooting] = useState(true)
   useEffect(() => { const t = setTimeout(() => setBooting(false), 350); return () => clearTimeout(t) }, [session.subEnvId])
   const goto = (id) => { setPage(id); setSidebarOpen(false) }
+
+  // Navigation déclenchée par d'autres composants (ex : l'assistant IA renvoie vers le Support).
+  useEffect(() => {
+    const h = (e) => { if (e.detail) goto(e.detail) }
+    window.addEventListener('app-navigate', h)
+    return () => window.removeEventListener('app-navigate', h)
+  }, [])
 
   const goCreateRdvFromNote = (content) => { setPendingNote(content); setPage('rdv') }
 
@@ -378,6 +400,9 @@ function MainApp() {
     support: <Support />,
     requests: <Requests />,
     tickets: <Tickets />,
+    clients: <Clients />,
+    projects: <Projects />,
+    supporttrash: <SupportTrash />,
     kpi: <Kpi />,
     teamlead: <TeamLead />,
     admin: <Admin mode="admin" />,
@@ -440,6 +465,11 @@ function MainApp() {
                           className={`w-full flex items-center gap-2 pl-3 pr-2 py-[7px] rounded-lg text-[13px] font-semibold transition ${page === item.id ? 'bg-brand text-white' : 'text-ink hover:bg-surface'}`}>
                           <item.icon size={15} className={`shrink-0 ${page === item.id ? '' : 'text-muted'}`} />
                           <span className="truncate">{label}</span>
+                          {badges[item.id] > 0 && (
+                            <span className={`ml-auto shrink-0 text-[10px] font-extrabold rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center ${page === item.id ? 'bg-white text-brand' : 'bg-red-500 text-white'}`}>
+                              {badges[item.id]}
+                            </span>
+                          )}
                         </button>
                       )
                     })}
