@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { LifeBuoy, Plus, ArrowLeft, MessageSquare } from 'lucide-react'
-import { useStore, TICKET_CATEGORIES, fmtDate } from '../store.jsx'
+import { useStore, TICKET_CATEGORIES, fmtDate, ticketHasUnread } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
 
@@ -17,6 +17,13 @@ export default function Support() {
   const [creating, setCreating] = useState(false)
   const [openId, setOpenId] = useState('')
   const [form, setForm] = useState({ category: TICKET_CATEGORIES[0], message: '' })
+
+  // Ouverture déclenchée par l'assistant IA (problème énoncé) : pré-remplit le ticket.
+  useEffect(() => {
+    const h = (e) => { setOpenId(''); setForm({ category: TICKET_CATEGORIES[0], message: e.detail || '' }); setCreating(true) }
+    window.addEventListener('open-support-ticket', h)
+    return () => window.removeEventListener('open-support-ticket', h)
+  }, [])
 
   // L'utilisateur ne voit que ses propres tickets.
   const myTickets = (store.db.tickets || [])
@@ -64,11 +71,15 @@ export default function Support() {
         <div className="space-y-2">
           {myTickets.map(t => {
             const last = t.messages.at(-1)
+            const unread = ticketHasUnread(t, 'user')
             return (
               <button key={t.id} className="card p-3 w-full text-left hover:bg-surface transition flex items-center gap-3" onClick={() => setOpenId(t.id)}>
-                <div className="w-9 h-9 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0"><MessageSquare size={17} /></div>
+                <div className="w-9 h-9 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0 relative">
+                  <MessageSquare size={17} />
+                  {unread && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500" />}
+                </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm flex items-center gap-2">{t.category}</div>
+                  <div className={`text-sm flex items-center gap-2 ${unread ? 'font-extrabold' : 'font-bold'}`}>{t.category}</div>
                   <div className="text-xs text-muted truncate">{last?.from === 'bot' ? 'BD Report : ' : last?.from === 'support' ? `${last.authorName} : ` : 'Vous : '}{last?.photo && !last?.text ? '📷 Photo' : last?.text}</div>
                 </div>
                 <span className={`chip ${STATUS_CLASS[t.status]} shrink-0`}>{STATUS_LABEL[t.status]}</span>

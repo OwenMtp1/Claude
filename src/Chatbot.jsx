@@ -43,6 +43,14 @@ function runCommand(text, store) {
     return `💶 Catégorie de commission ajoutée : ${primeMatch[2]}–${primeMatch[3]} collaborateurs → ${primeMatch[1]} €.`
   }
 
+  // ---- Problème / bug signalé : on oriente l'utilisateur vers le Support
+  if (/(probl[èe]me|souci|bug|bogue|erreur|plante|plant[ée]|impossible|arrive pas|marche pas|fonctionne pas|affiche pas|charge pas|écran blanc|lenteur|c'est lent|ça rame|ça bug|ne s'ouvre)/i.test(text)) {
+    return {
+      text: "Je suis désolé pour la gêne 🙁 Cela ressemble à un souci technique. Je vous oriente vers le Support : ouvrez un ticket et l'équipe technique BD Report prend le relais directement dans une conversation.",
+      action: 'support', payload: text,
+    }
+  }
+
   // ---- Questions analytiques
   if (t.includes('meilleur') && (t.includes('canal') || t.includes('source') || t.includes('provenance'))) {
     const counts = {}
@@ -121,9 +129,17 @@ export default function Chatbot() {
   const send = () => {
     if (!input.trim()) return
     const reply = runCommand(input, store)
-    setMsgs(m => [...m, { from: 'me', text: input }, { from: 'bot', text: reply }])
+    const botMsg = typeof reply === 'string' ? { from: 'bot', text: reply } : { from: 'bot', ...reply }
+    setMsgs(m => [...m, { from: 'me', text: input }, botMsg])
     setInput('')
     setTimeout(() => endRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+  }
+
+  const goSupport = (payload) => {
+    setOpen(false)
+    window.dispatchEvent(new CustomEvent('app-navigate', { detail: 'support' }))
+    // Laisse la page Support se monter avant de pré-remplir le ticket.
+    setTimeout(() => window.dispatchEvent(new CustomEvent('open-support-ticket', { detail: payload || '' })), 80)
   }
 
   return (
@@ -140,8 +156,13 @@ export default function Chatbot() {
           </div>
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {msgs.map((m, i) => (
-              <div key={i} className={`text-sm p-2.5 rounded-xl max-w-[90%] whitespace-pre-wrap ${m.from === 'bot' ? 'bg-surface' : 'bg-brand text-white ml-auto'}`}>
-                {m.text}
+              <div key={i} className={`max-w-[90%] ${m.from === 'bot' ? '' : 'ml-auto'}`}>
+                <div className={`text-sm p-2.5 rounded-xl whitespace-pre-wrap ${m.from === 'bot' ? 'bg-surface' : 'bg-brand text-white'}`}>
+                  {m.text}
+                </div>
+                {m.action === 'support' && (
+                  <button className="btn-primary !py-1.5 text-xs mt-1.5" onClick={() => goSupport(m.payload)}>🎫 Ouvrir un ticket de support</button>
+                )}
               </div>
             ))}
             <div ref={endRef} />

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { LifeBuoy, ArrowLeft, MessageSquare, CheckCircle2, Trash2, Building2 } from 'lucide-react'
-import { useStore, fmtDate } from '../store.jsx'
+import { useStore, fmtDate, ticketHasUnread } from '../store.jsx'
 import { Empty, Confirm, toast } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
 
@@ -74,15 +74,15 @@ export default function Tickets() {
         <div className="space-y-2">
           {tickets.map(t => {
             const last = t.messages.at(-1)
-            const waiting = last?.from === 'user' // dernier message côté utilisateur = en attente de réponse
+            const unread = ticketHasUnread(t, 'support')
             return (
               <button key={t.id} className="card p-3 w-full text-left hover:bg-surface transition flex items-center gap-3" onClick={() => setOpenId(t.id)}>
                 <div className="w-9 h-9 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0 relative">
                   <MessageSquare size={17} />
-                  {waiting && t.status !== 'closed' && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500" />}
+                  {unread && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-sm flex items-center gap-2">{t.category} <span className="text-xs text-muted font-normal">· {t.userName}</span></div>
+                  <div className={`text-sm flex items-center gap-2 ${unread ? 'font-extrabold' : 'font-bold'}`}>{t.category} <span className="text-xs text-muted font-normal">· {t.userName}</span></div>
                   <div className="text-xs text-muted truncate">{last?.from === 'bot' ? 'BD Report : ' : last?.from === 'support' ? `${last.authorName} : ` : `${t.userName} : `}{last?.photo && !last?.text ? '📷 Photo' : last?.text}</div>
                 </div>
                 <span className={`chip ${STATUS_CLASS[t.status]} shrink-0`}>{STATUS_LABEL[t.status]}</span>

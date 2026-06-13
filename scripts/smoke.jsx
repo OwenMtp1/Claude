@@ -82,12 +82,26 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Gestion Administration']) {
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
     await click(btn)
     if (!text().includes(label)) throw new Error(`Page ${label} did not render`)
   }
+
+  // 6b. Support : créer un ticket, vérifier la conversation, le côté support et l'enrichissement client
+  await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Support'))
+  await click(find('button', 'Nouveau ticket'))
+  if (!text().includes('Décrivez votre problème')) throw new Error('Ticket form did not open')
+  await type(container.querySelector('textarea'), 'Test smoke : impossible de me connecter')
+  await click(find('button', 'Créer le ticket'))
+  if (!text().includes('équipe technique')) throw new Error('Bot auto-message missing in ticket conversation')
+  // Les onglets support peuvent porter une pastille de messages non lus (chiffre accolé au libellé).
+  const navBtn = (label) => [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
+  await click(navBtn('Tickets Techniques'))
+  if (!text().includes('Connexion & authentification')) throw new Error('Ticket not visible in Tickets Techniques')
+  await click(navBtn('Clients'))
+  if (!text().includes('PeopleSpheres')) throw new Error('Client not auto-created in Clients kanban')
 
   // 7. Créer un RDV via le formulaire : validation des champs obligatoires puis création réelle
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Mes Rendez-vous'))

@@ -1,0 +1,57 @@
+import React, { useState } from 'react'
+import { Trash2, RotateCcw, Inbox, LifeBuoy } from 'lucide-react'
+import { useStore } from '../store.jsx'
+import { Empty, Confirm, toast } from '../ui.jsx'
+
+const daysLeft = (deletedAt) => Math.max(0, 30 - Math.floor((Date.now() - new Date(deletedAt).getTime()) / 86400000))
+const fmtTs = (ts) => new Date(ts).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+
+export default function SupportTrash() {
+  const store = useStore()
+  const items = store.db.supportTrash || []
+  const [confirm, setConfirm] = useState(null) // {kind:'all'} | {kind:'one', id}
+
+  const restore = (id) => { store.restoreSupportItem(id); toast('Élément restauré') }
+  const purge = () => {
+    if (confirm.kind === 'all') store.emptySupportTrash()
+    else store.purgeSupportItem(confirm.id)
+    toast('Supprimé définitivement')
+    setConfirm(null)
+  }
+
+  const label = (it) => it.kind === 'request'
+    ? { icon: <Inbox size={15} className="text-brand" />, title: it.data.name || 'Demande', sub: it.data.email || '' }
+    : { icon: <LifeBuoy size={15} className="text-brand" />, title: it.data.category || 'Ticket', sub: it.data.userName || '' }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-extrabold flex items-center gap-2"><Trash2 size={20} className="text-brand" /> Corbeille support</h2>
+        {items.length > 0 && <button className="btn-ghost text-xs text-red-500" onClick={() => setConfirm({ kind: 'all' })}>Vider la corbeille</button>}
+      </div>
+      <p className="text-xs text-muted -mt-2">Demandes et tickets supprimés, restaurables pendant 30 jours puis purgés automatiquement.</p>
+
+      {items.length === 0 ? <Empty text="La corbeille support est vide." /> : (
+        <div className="space-y-2">
+          {items.map(it => {
+            const l = label(it)
+            return (
+              <div key={it.id} className="card p-3 flex items-center gap-3 flex-wrap">
+                <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center shrink-0">{l.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-sm truncate">{l.title} <span className="chip bg-surface text-muted ml-1">{it.kind === 'request' ? 'Demande' : 'Ticket'}</span></div>
+                  <div className="text-xs text-muted truncate">{l.sub} · supprimé le {fmtTs(it.deletedAt)}</div>
+                </div>
+                <span className="text-xs text-muted shrink-0">expire dans {daysLeft(it.deletedAt)} j</span>
+                <button className="btn-ghost !py-1 text-xs" onClick={() => restore(it.id)}><RotateCcw size={12} /> Restaurer</button>
+                <button className="btn-danger !py-1 text-xs" onClick={() => setConfirm({ kind: 'one', id: it.id })}><Trash2 size={12} /></button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {confirm && <Confirm message={confirm.kind === 'all' ? 'Vider définitivement la corbeille support ?' : 'Supprimer définitivement cet élément ?'} onYes={purge} onNo={() => setConfirm(null)} />}
+    </div>
+  )
+}

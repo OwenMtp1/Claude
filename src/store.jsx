@@ -5,7 +5,7 @@ const SESSION_KEY = 'bdrflow_session_v1'
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.11.0'
+export const APP_VERSION = '1.12.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -223,6 +223,34 @@ export const ROLES = ['Fondateur', 'Support BD Report', 'Administrateur', 'Manag
 export const SUPPORT_ROLES = ['Fondateur', 'Support BD Report']
 export const isSupportRole = (role) => SUPPORT_ROLES.includes(role)
 
+// Colonnes du kanban Clients (back-office support).
+export const CLIENT_STATUSES = [
+  { id: 'demandes', label: 'Demandes en cours', color: 'bg-amber-100 text-amber-700' },
+  { id: 'actifs', label: 'Clients actifs', color: 'bg-emerald-100 text-emerald-700' },
+  { id: 'attente', label: 'En attente de support', color: 'bg-blue-100 text-blue-700' },
+  { id: 'anciens', label: 'Anciens clients', color: 'bg-gray-200 text-gray-600' },
+]
+
+// Phases standard d'un projet d'implémentation (gestion de projet support).
+export const PROJECT_PHASES = ['Cadrage', 'Implémentation', 'Paramétrage', 'Formation', 'Recette', 'Go-live', 'Suivi']
+export const PROJECT_PHASE_COLORS = ['#3b5bdb', '#0ea5e9', '#8b5cf6', '#f59e0b', '#ec4899', '#10b981', '#64748b']
+export const PROJECT_STATUSES = [
+  { id: 'prevu', label: 'Prévu', color: 'bg-gray-200 text-gray-600' },
+  { id: 'encours', label: 'En cours', color: 'bg-blue-100 text-blue-700' },
+  { id: 'pause', label: 'En pause', color: 'bg-amber-100 text-amber-700' },
+  { id: 'termine', label: 'Terminé', color: 'bg-emerald-100 text-emerald-700' },
+]
+
+// Vrai s'il existe des messages non lus pour le côté donné ('user' = client, 'support' = équipe technique).
+export function ticketHasUnread(ticket, side) {
+  if (!ticket) return false
+  const readAt = side === 'user' ? (ticket.readUserAt || '') : (ticket.readSupportAt || '')
+  return (ticket.messages || []).some(m => {
+    const incoming = side === 'user' ? (m.from === 'support' || m.from === 'bot') : (m.from === 'user')
+    return incoming && (m.ts || '') > readAt
+  })
+}
+
 // Les 10 catégories de tickets les plus fréquentes sur un SaaS de ce type.
 export const TICKET_CATEGORIES = [
   'Connexion & authentification',
@@ -353,6 +381,26 @@ function contactsFromRdvs(rdvs) {
   return out
 }
 
+// Enrichit le kanban Clients du back-office support dès qu'un ticket arrive au service technique.
+function enrichClientFromTicket(d, ticket) {
+  d.clients = d.clients || []
+  const key = ticket.envId ? 'env:' + ticket.envId : 'acc:' + (ticket.userAccountId || ticket.userName)
+  const now = new Date().toISOString()
+  let client = d.clients.find(c => c.key === key)
+  if (!client) {
+    client = {
+      id: uid(), key, name: ticket.clientName || ticket.userName,
+      envId: ticket.envId || null, accountId: ticket.userAccountId || null,
+      status: 'demandes', createdAt: now, lastActivity: now, note: '',
+    }
+    d.clients.unshift(client)
+  } else {
+    client.lastActivity = now
+    if (client.status === 'anciens') client.status = 'demandes' // un ancien client qui revient repasse en demande
+  }
+  return client
+}
+
 function buildSeedDb() {
   const envId = 'env-peoplespheres'
   const subId = 'sub-owen'
@@ -369,6 +417,9 @@ function buildSeedDb() {
     data: { [subId]: subData },
     supportRequests: [], // « Nouvelles demandes » : formulaires de contact du site
     tickets: [], // « Tickets Techniques » : tickets de support ouverts depuis l'app
+    clients: [], // Kanban Clients (back-office support)
+    projects: [], // Gestion de projet (back-office support)
+    supportTrash: [], // Corbeille du back-office support (demandes / tickets supprimés)
   }
 }
 
@@ -555,6 +606,11 @@ function migrate(db) {
   // Données globales support (partagées entre tous les comptes support)
   db.supportRequests = db.supportRequests || []
   db.tickets = db.tickets || []
+  db.clients = db.clients || []
+  db.projects = db.projects || []
+  // Corbeille support : purge des éléments supprimés depuis plus de 30 jours
+  const supCutoff = new Date(Date.now() - 30 * 86400000).toISOString()
+  db.supportTrash = (db.supportTrash || []).filter(t => t.deletedAt > supCutoff)
   // Valeurs par défaut des nouveaux champs + purge de la corbeille (> 30 jours)
   const cutoff = new Date(Date.now() - 30 * 86400000).toISOString()
   Object.values(db.data || {}).forEach(data => {
@@ -847,45 +903,74 @@ export function StoreProvider({ children }) {
         setDb(d => { const r = (d.supportRequests || []).find(x => x.id === id); if (r) Object.assign(r, patch); return d })
       },
       deleteSupportRequest(id) {
-        setDb(d => { d.supportRequests = (d.supportRequests || []).filter(x => x.id !== id); return d })
+        // Suppression douce : la demande part dans la corbeille du back-office support.
+        setDb(d => {
+          const r = (d.supportRequests || []).find(x => x.id === id)
+          if (r) { d.supportTrash = d.supportTrash || []; d.supportTrash.unshift({ id: uid(), kind: 'request', deletedAt: new Date().toISOString(), data: r }) }
+          d.supportRequests = (d.supportRequests || []).filter(x => x.id !== id)
+          return d
+        })
       },
       // ----- Support : tickets techniques (conversation utilisateur ↔ équipe technique)
       createTicket({ category, message }) {
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
+        const env = db.environments.find(e => e.id === session?.envId)
         const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
         const photo = sub?.photo || account?.photo || ''
         const now = new Date().toISOString()
+        const botTs = new Date(Date.now() + 1000).toISOString()
         const ticket = {
           id: uid(), category: category || 'Autre / question générale', status: 'open',
           userAccountId: account?.id || null, userName: prenom, userPhoto: photo,
+          clientName: env?.name || prenom,
           envId: session?.envId || null, subEnvId: session?.subEnvId || null,
           createdAt: now, handledBy: null, typing: {},
+          // Suivi des messages lus : l'auteur a vu son message + l'accueil auto ; le support n'a encore rien vu.
+          readUserAt: botTs, readSupportAt: '',
           messages: [
             { id: uid(), ts: now, from: 'user', authorAccountId: account?.id || null, authorName: prenom, authorPhoto: photo, text: message || '', photo: '' },
-            { id: uid(), ts: new Date(Date.now() + 1000).toISOString(), from: 'bot', authorName: 'BD Report', authorPhoto: '', text: `Bonjour ${prenom}, merci pour votre message. Un membre de l'équipe technique BD Report va très prochainement prendre en charge votre demande. Vous recevrez la réponse directement dans cette conversation.`, photo: '' },
+            { id: uid(), ts: botTs, from: 'bot', authorName: 'BD Report', authorPhoto: '', text: `Bonjour ${prenom}, merci pour votre message. Un membre de l'équipe technique BD Report va très prochainement prendre en charge votre demande. Vous recevrez la réponse directement dans cette conversation.`, photo: '' },
           ],
         }
-        setDb(d => { d.tickets = d.tickets || []; d.tickets.unshift(ticket); return d })
+        setDb(d => { d.tickets = d.tickets || []; d.tickets.unshift(ticket); enrichClientFromTicket(d, ticket); return d })
         return ticket
       },
       postTicketMessage(ticketId, { text, photo, from }) {
         const sub = db.subenvs.find(s => s.id === session?.subEnvId)
         const prenom = sub?.prenom || account?.pseudo || 'Utilisateur'
         const authorPhoto = sub?.photo || account?.photo || ''
+        const msgTs = new Date().toISOString()
         setDb(d => {
           const t = (d.tickets || []).find(x => x.id === ticketId)
           if (!t) return d
           t.messages.push({
-            id: uid(), ts: new Date().toISOString(), from,
+            id: uid(), ts: msgTs, from,
             authorAccountId: account?.id || null, authorName: prenom, authorPhoto,
             text: text || '', photo: photo || '',
           })
           if (from === 'support') {
             if (!t.handledBy) t.handledBy = account?.id || null
             if (t.status === 'open') t.status = 'in_progress'
+            t.readSupportAt = msgTs // en répondant, le support a tout lu
+          } else if (from === 'user') {
+            t.readUserAt = msgTs
           }
           // Le message envoyé arrête l'indicateur de saisie de son auteur
           t.typing = { ...(t.typing || {}), [from + 'At']: 0 }
+          // Met à jour l'activité du client correspondant
+          const c = (d.clients || []).find(x => x.envId ? x.envId === t.envId : x.accountId === t.userAccountId)
+          if (c) c.lastActivity = msgTs
+          return d
+        })
+      },
+      // Marque les messages d'un ticket comme lus pour le côté concerné ('user' | 'support').
+      markTicketRead(ticketId, side) {
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (!t) return d
+          const last = t.messages.length ? t.messages[t.messages.length - 1].ts : new Date().toISOString()
+          if (side === 'user') t.readUserAt = last
+          else t.readSupportAt = last
           return d
         })
       },
@@ -903,8 +988,48 @@ export function StoreProvider({ children }) {
         setDb(d => { const t = (d.tickets || []).find(x => x.id === ticketId); if (t) t.status = status; return d })
       },
       deleteTicket(ticketId) {
-        setDb(d => { d.tickets = (d.tickets || []).filter(x => x.id !== ticketId); return d })
+        // Suppression douce : le ticket part dans la corbeille du back-office support.
+        setDb(d => {
+          const t = (d.tickets || []).find(x => x.id === ticketId)
+          if (t) { d.supportTrash = d.supportTrash || []; d.supportTrash.unshift({ id: uid(), kind: 'ticket', deletedAt: new Date().toISOString(), data: t }) }
+          d.tickets = (d.tickets || []).filter(x => x.id !== ticketId)
+          return d
+        })
       },
+      // ----- Corbeille du back-office support
+      restoreSupportItem(trashId) {
+        setDb(d => {
+          const item = (d.supportTrash || []).find(x => x.id === trashId)
+          if (!item) return d
+          if (item.kind === 'request') { d.supportRequests = d.supportRequests || []; d.supportRequests.unshift(item.data) }
+          else if (item.kind === 'ticket') { d.tickets = d.tickets || []; d.tickets.unshift(item.data) }
+          d.supportTrash = d.supportTrash.filter(x => x.id !== trashId)
+          return d
+        })
+      },
+      purgeSupportItem(trashId) {
+        setDb(d => { d.supportTrash = (d.supportTrash || []).filter(x => x.id !== trashId); return d })
+      },
+      emptySupportTrash() { setDb(d => { d.supportTrash = []; return d }) },
+      // ----- Kanban Clients (back-office support)
+      setClientStatus(id, status) {
+        setDb(d => { const c = (d.clients || []).find(x => x.id === id); if (c) c.status = status; return d })
+      },
+      updateClient(id, patch) {
+        setDb(d => { const c = (d.clients || []).find(x => x.id === id); if (c) Object.assign(c, patch); return d })
+      },
+      deleteClient(id) { setDb(d => { d.clients = (d.clients || []).filter(x => x.id !== id); return d }) },
+      // ----- Gestion de projet (back-office support)
+      saveProject(project) {
+        setDb(d => {
+          d.projects = d.projects || []
+          const i = d.projects.findIndex(p => p.id === project.id)
+          if (i >= 0) d.projects[i] = project
+          else d.projects.unshift({ ...project, id: project.id || uid(), createdAt: new Date().toISOString() })
+          return d
+        })
+      },
+      deleteProject(id) { setDb(d => { d.projects = (d.projects || []).filter(p => p.id !== id); return d }) },
     }
   }, [db, session])
 
