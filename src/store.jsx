@@ -846,14 +846,16 @@ export function StoreProvider({ children }) {
     if (!isSupabaseConfigured()) { remoteReady.current = true; return }
     let unsubState = () => {}, unsubContact = () => {}, cancelled = false
     ;(async () => {
-      // 1) État initial : on adopte le distant s'il est plus récent, sinon on y pousse l'état local.
+      // 1) État initial : le distant fait foi s'il existe (évite qu'un appareil fraîchement
+      //    chargé n'écrase l'état partagé à cause d'une horloge plus récente). Sinon (1re fois)
+      //    on initialise le distant avec l'état local.
       const remote = await fetchRemoteState()
       if (cancelled) return
-      if (remote && (remote._savedAt || 0) > lastSavedAt.current) {
+      if (remote) {
         applyingRemote.current = true
         setDbState(migrate(remote))
       } else {
-        pushRemoteState({ ...db, _savedAt: lastSavedAt.current || Date.now(), _client: clientId.current })
+        await pushRemoteState({ ...db, _savedAt: lastSavedAt.current || Date.now(), _client: clientId.current })
       }
       remoteReady.current = true
       // 2) Temps réel sur l'état applicatif (on ignore nos propres échos).
