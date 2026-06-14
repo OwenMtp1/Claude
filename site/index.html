@@ -288,6 +288,21 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
     </div>
     <p class="muted" style="font-size:12.5px;color:var(--muted);margin-top:14px" data-i18n="apps.note">Disponible aussi sur Linux. Application gratuite, mises à jour régulières.</p>
   </div>
+  <script>
+    // Résout les boutons vers l'installeur direct du bon OS (repli : page des releases).
+    (function(){
+      fetch('https://api.github.com/repos/OwenMtp1/Claude/releases/latest')
+        .then(function(r){ return r.ok ? r.json() : null; })
+        .then(function(rel){
+          if(!rel || !rel.assets) return;
+          function pick(){ var preds=[].slice.call(arguments); for(var i=0;i<preds.length;i++){ for(var j=0;j<rel.assets.length;j++){ var n=rel.assets[j].name.toLowerCase(); if(preds[i](n)) return rel.assets[j].browser_download_url; } } return null; }
+          var win=pick(function(n){return n.indexOf('-setup.exe')>-1;},function(n){return n.slice(-4)==='.msi';},function(n){return n.slice(-4)==='.exe';});
+          var mac=pick(function(n){return n.slice(-4)==='.dmg';});
+          if(win){ document.getElementById('dlWin').href=win; }
+          if(mac){ document.getElementById('dlMac').href=mac; }
+        }).catch(function(){});
+    })();
+  </script>
 </section>
 
 <section id="contact">
