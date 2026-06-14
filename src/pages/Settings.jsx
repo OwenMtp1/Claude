@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { Palette, Globe, LayoutGrid, Plug, User, Trash2, Check, Download, Upload, ShieldCheck, Ban, Lock, Cloud } from 'lucide-react'
 import { useStore, hashPw } from '../store.jsx'
 import { THEMES, applyTheme } from '../themes.js'
@@ -31,24 +31,7 @@ function SupabaseCard() {
   )
 }
 
-// Génère une copie autonome de l'app (HTML + scripts inlinés) téléchargeable pour un usage local hors-ligne.
-function downloadStandaloneApp() {
-  const clone = document.documentElement.cloneNode(true)
-  const root = clone.querySelector('#root')
-  if (root) root.innerHTML = '' // on repart d'une app vierge qui se remonte toute seule à l'ouverture
-  const html = '<!doctype html>\n' + clone.outerHTML
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = 'BDR-Flow-Pro.html'
-  a.click()
-  URL.revokeObjectURL(a.href)
-}
-
-// Détecte si les scripts de l'app sont inlinés (build autonome) ou externes (serveur de dev).
-function isStandaloneCapable() {
-  return [...document.querySelectorAll('script')].some(s => !s.src && s.textContent.length > 1000)
-}
+const RELEASES_URL = 'https://github.com/OwenMtp1/Claude/releases/latest'
 
 function ImageInput({ value, onChange, label }) {
   const ref = useRef(null)
@@ -75,6 +58,27 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
   const [pendingTheme, setPendingTheme] = useState(currentTheme)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [importMsg, setImportMsg] = useState('')
+  // Résout les liens de téléchargement directs (par OS) depuis la dernière release GitHub.
+  const [dlUrls, setDlUrls] = useState(null)
+  useEffect(() => {
+    let cancelled = false
+    fetch('https://api.github.com/repos/OwenMtp1/Claude/releases/latest')
+      .then(r => (r.ok ? r.json() : null))
+      .then(rel => {
+        if (cancelled || !rel || !Array.isArray(rel.assets)) return
+        const pick = (...tests) => {
+          for (const t of tests) { const a = rel.assets.find(x => t(x.name.toLowerCase())); if (a) return a.browser_download_url }
+          return null
+        }
+        setDlUrls({
+          win: pick(n => n.endsWith('-setup.exe'), n => n.endsWith('.msi'), n => n.endsWith('.exe')),
+          mac: pick(n => n.endsWith('.dmg')),
+          linux: pick(n => n.endsWith('.appimage'), n => n.endsWith('.deb')),
+        })
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [])
   const importRef = useRef(null)
   const me = store.account
   const session = store.session
@@ -248,26 +252,14 @@ export default function Settings({ onEditWidgets, currentTheme, onThemeSaved }) 
           <h3 className="font-bold flex items-center gap-2"><Download size={17} className="text-brand" /> Application de bureau (Windows / macOS)</h3>
           <p className="text-sm text-muted">Installez BD Report en application native sur votre ordinateur. Même expérience, synchronisée dans le cloud.</p>
           <div className="flex gap-2 flex-wrap">
-            <a className="btn-primary" href="https://github.com/OwenMtp1/Claude/releases/latest" target="_blank" rel="noopener"><Download size={15} /> Windows</a>
-            <a className="btn-primary" href="https://github.com/OwenMtp1/Claude/releases/latest" target="_blank" rel="noopener"><Download size={15} /> macOS</a>
-            <a className="btn-ghost text-xs" href="https://github.com/OwenMtp1/Claude/releases/latest" target="_blank" rel="noopener">Linux & autres versions</a>
+            <a className="btn-primary" href={dlUrls?.win || RELEASES_URL} target="_blank" rel="noopener"><Download size={15} /> Windows</a>
+            <a className="btn-primary" href={dlUrls?.mac || RELEASES_URL} target="_blank" rel="noopener"><Download size={15} /> macOS</a>
+            <a className="btn-ghost text-xs" href={dlUrls?.linux || RELEASES_URL} target="_blank" rel="noopener">Linux & autres versions</a>
           </div>
-          <p className="text-xs text-muted">Les installeurs sont publiés dans les releases du projet. Build non signée au premier lancement : autorisez l'app (macOS : clic droit → Ouvrir).</p>
+          <p className="text-xs text-muted">Téléchargement direct du bon installeur. Build non signée au premier lancement : autorisez l'app (macOS : clic droit → Ouvrir ; Windows : Informations complémentaires → Exécuter quand même).</p>
         </div>
         <div className="card p-4 space-y-3">
-          <h3 className="font-bold flex items-center gap-2"><Download size={17} className="text-brand" /> Version autonome (un seul fichier HTML)</h3>
-          <p className="text-sm text-muted">Téléchargez une copie autonome de BD Report dans un seul fichier HTML. Ouvrez-le directement dans votre navigateur, sans connexion ni serveur — toutes les fonctionnalités restent disponibles et vos données sont conservées sur votre ordinateur.</p>
-          {isStandaloneCapable() ? (
-            <button className="btn-primary" onClick={downloadStandaloneApp}><Download size={16} /> Télécharger BDR-Flow-Pro.html</button>
-          ) : (
-            <div className="rounded-xl bg-surface p-3 text-xs text-muted">
-              Vous utilisez actuellement la version « serveur de développement ». Le téléchargement autonome fonctionne sur la version compilée (le fichier <code>BDR-Flow-Pro.html</code> ou l'app déployée en ligne).
-              <button className="btn-ghost text-xs mt-2" onClick={downloadStandaloneApp}><Download size={14} /> Tenter le téléchargement quand même</button>
-            </div>
-          )}
-          <p className="text-xs text-muted">Astuce : ce fichier téléchargé contient lui-même le bouton de téléchargement, vous pourrez donc toujours en regénérer une copie à jour.</p>
-
-          <div className="border-t border-line pt-3 space-y-2">
+          <div className="space-y-2">
             <h4 className="font-bold text-sm">Sauvegarde & restauration des données</h4>
             <p className="text-xs text-muted">Exportez l'intégralité de vos données (tous les environnements, espaces, RDV, notes, contacts, barèmes…) dans un fichier JSON, et restaurez-les sur n'importe quelle copie de l'app.</p>
             <div className="flex gap-2 flex-wrap">
