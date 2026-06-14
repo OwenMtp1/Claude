@@ -1,8 +1,75 @@
 import React, { useState } from 'react'
-import { LifeBuoy, ArrowLeft, MessageSquare, CheckCircle2, Trash2, Building2, Star, UserCog } from 'lucide-react'
-import { useStore, fmtDate, ticketHasUnread, TICKET_PRIORITIES, SUPPORT_ROLES, priorityRank } from '../store.jsx'
-import { Empty, Confirm, toast } from '../ui.jsx'
+import { LifeBuoy, ArrowLeft, MessageSquare, CheckCircle2, Trash2, Building2, Star, UserCog, MessageSquareText, Plus, Clock, AlertTriangle } from 'lucide-react'
+import { useStore, fmtDate, ticketHasUnread, TICKET_PRIORITIES, SUPPORT_ROLES, priorityRank, slaInfo, fmtDuration, SLA_HOURS } from '../store.jsx'
+import { Empty, Confirm, toast, Modal, Field } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
+
+// Tableau de bord satisfaction (CSAT)
+function CsatDashboard({ tickets }) {
+  const rated = tickets.filter(t => t.csat)
+  if (!rated.length) return null
+  const avg = rated.reduce((a, t) => a + t.csat.score, 0) / rated.length
+  const dist = [1, 2, 3, 4, 5].map(n => rated.filter(t => t.csat.score === n).length)
+  const comments = rated.filter(t => t.csat.comment).slice(0, 3)
+  return (
+    <div className="card p-4">
+      <div className="flex items-center gap-4 flex-wrap">
+        <div>
+          <div className="text-xs text-muted font-bold uppercase tracking-wide">Satisfaction (CSAT)</div>
+          <div className="flex items-baseline gap-1"><span className="text-3xl font-extrabold">{avg.toFixed(1)}</span><span className="text-muted">/5</span></div>
+          <div className="text-xs text-muted">{rated.length} avis</div>
+        </div>
+        <div className="flex-1 min-w-[160px] space-y-0.5">
+          {[5, 4, 3, 2, 1].map(n => {
+            const c = dist[n - 1], pct = rated.length ? Math.round(c / rated.length * 100) : 0
+            return (
+              <div key={n} className="flex items-center gap-2 text-[11px]">
+                <span className="w-3 text-muted">{n}</span><Star size={10} className="text-amber-400 fill-amber-400" />
+                <div className="flex-1 h-2 rounded-full bg-surface overflow-hidden"><div className="h-full bg-amber-400 rounded-full" style={{ width: `${pct}%` }} /></div>
+                <span className="w-7 text-right text-muted">{c}</span>
+              </div>
+            )
+          })}
+        </div>
+        {comments.length > 0 && (
+          <div className="flex-1 min-w-[200px] space-y-1">
+            {comments.map(t => <div key={t.id} className="text-xs text-muted italic">« {t.csat.comment} » — {t.userName}</div>)}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// Gestion des réponses types
+function CannedManager({ store, onClose }) {
+  const list = store.db.cannedReplies || []
+  const [form, setForm] = useState({ title: '', text: '' })
+  return (
+    <Modal title="Réponses types" onClose={onClose} wide>
+      <div className="space-y-3">
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {list.length === 0 && <p className="text-xs text-muted">Aucune réponse type.</p>}
+          {list.map(r => (
+            <div key={r.id} className="rounded-xl bg-surface p-2.5">
+              <div className="flex items-center gap-2">
+                <input className="input !py-1 text-sm font-bold" value={r.title} onChange={e => store.updateCannedReply(r.id, { title: e.target.value })} />
+                <button className="p-1.5 text-red-500 hover:bg-red-50 rounded shrink-0" onClick={() => store.deleteCannedReply(r.id)}><Trash2 size={14} /></button>
+              </div>
+              <textarea className="input !py-1 text-sm mt-1 min-h-[50px]" value={r.text} onChange={e => store.updateCannedReply(r.id, { text: e.target.value })} />
+            </div>
+          ))}
+        </div>
+        <div className="border-t border-line pt-3 space-y-2">
+          <div className="text-xs font-bold">Nouvelle réponse type</div>
+          <input className="input text-sm" placeholder="Titre" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} />
+          <textarea className="input text-sm min-h-[60px]" placeholder="Texte de la réponse…" value={form.text} onChange={e => setForm(f => ({ ...f, text: e.target.value }))} />
+          <button className="btn-primary !py-1.5 text-sm" onClick={() => { if (!form.text.trim()) return; store.addCannedReply(form); setForm({ title: '', text: '' }); toast('Réponse type ajoutée') }}><Plus size={14} /> Ajouter</button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 const STATUS_LABEL = { open: 'Ouvert', in_progress: 'En cours', closed: 'Clôturé' }
 const STATUS_CLASS = {
@@ -20,6 +87,7 @@ export default function Tickets() {
   const [fPrio, setFPrio] = useState('')
   const [fAssignee, setFAssignee] = useState('') // '' | 'me' | accountId
   const [confirmDel, setConfirmDel] = useState(null)
+  const [manageCanned, setManageCanned] = useState(false)
 
   const envName = (id) => store.db.environments.find(e => e.id === id)?.name || '—'
   const supportMembers = store.db.accounts.filter(a => SUPPORT_ROLES.includes(a.role))
@@ -52,6 +120,20 @@ export default function Tickets() {
                 <span className="flex items-center gap-1"><Building2 size={11} /> {envName(openTicket.envId)}</span>
                 <span>· Ouvert le {fmtDate(openTicket.createdAt.slice(0, 10))}</span>
               </div>
+              {(() => {
+                const s = slaInfo(openTicket)
+                return (
+                  <div className="text-xs flex items-center gap-2 flex-wrap mt-0.5">
+                    <span className="text-muted flex items-center gap-1"><Clock size={11} /> SLA {SLA_HOURS[openTicket.priority]}h :</span>
+                    {s.responded
+                      ? <span className={s.breached ? 'text-red-600 font-semibold' : 'text-emerald-600 font-semibold'}>1re réponse en {fmtDuration(s.ms)}{s.breached ? ' (hors délai)' : ''}</span>
+                      : openTicket.status === 'closed'
+                        ? <span className="text-muted">clôturé sans réponse</span>
+                        : <span className={s.breached ? 'text-red-600 font-semibold flex items-center gap-1' : 'text-amber-600'}>{s.breached && <AlertTriangle size={11} />}en attente depuis {fmtDuration(s.ms)}{s.breached ? ' — SLA dépassé' : ''}</span>}
+                    {openTicket.closedAt && <span className="text-muted">· résolu en {fmtDuration(new Date(openTicket.closedAt) - new Date(openTicket.createdAt))}</span>}
+                  </div>
+                )
+              })()}
             </div>
             <div className="flex items-center gap-1.5">
               <span className={`chip ${STATUS_CLASS[openTicket.status]}`}>{STATUS_LABEL[openTicket.status]}</span>
@@ -87,8 +169,13 @@ export default function Tickets() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-xl font-extrabold flex items-center gap-2"><LifeBuoy size={20} className="text-brand" /> Tickets Techniques</h2>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-xl font-extrabold flex items-center gap-2"><LifeBuoy size={20} className="text-brand" /> Tickets Techniques</h2>
+        <button className="btn-ghost text-xs" onClick={() => setManageCanned(true)}><MessageSquareText size={14} /> Réponses types</button>
+      </div>
       <p className="text-sm text-muted -mt-2">Tous les tickets ouverts par les utilisateurs de BD Report, triés par priorité.</p>
+
+      <CsatDashboard tickets={store.db.tickets || []} />
 
       <div className="card p-3 flex items-center gap-2 flex-wrap text-xs">
         {[['', 'Tous'], ['open', 'Ouverts'], ['in_progress', 'En cours'], ['closed', 'Clôturés']].map(([id, lbl]) => (
@@ -114,6 +201,8 @@ export default function Tickets() {
           {tickets.map(t => {
             const last = t.messages.at(-1)
             const unread = ticketHasUnread(t, 'support')
+            const sla = slaInfo(t)
+            const slaOverdue = sla.breached && !sla.responded && t.status !== 'closed'
             return (
               <button key={t.id} className="card p-3 w-full text-left hover:bg-surface transition flex items-center gap-3" onClick={() => setOpenId(t.id)}>
                 <div className="w-9 h-9 rounded-xl bg-brand/10 text-brand flex items-center justify-center shrink-0 relative">
@@ -125,6 +214,7 @@ export default function Tickets() {
                     {t.category} <span className="text-xs text-muted font-normal">· {t.userName}</span>
                     <span className={`chip ${prio(t.priority).color}`}>{prio(t.priority).label}</span>
                     {t.assignedTo && <span className="chip bg-brand/10 text-brand">{memberName(t.assignedTo)}</span>}
+                    {slaOverdue && <span className="chip bg-red-100 text-red-700 flex items-center gap-0.5"><AlertTriangle size={9} /> SLA dépassé</span>}
                     {t.csat && <span className="chip bg-amber-100 text-amber-700 flex items-center gap-0.5"><Star size={9} className="fill-amber-500 text-amber-500" /> {t.csat.score}</span>}
                   </div>
                   <div className="text-xs text-muted truncate">{last?.from === 'bot' ? 'BD Report : ' : last?.from === 'support' ? `${last.authorName} : ` : `${t.userName} : `}{last?.photo && !last?.text ? '📷 Photo' : last?.text}</div>
@@ -135,6 +225,7 @@ export default function Tickets() {
           })}
         </div>
       )}
+      {manageCanned && <CannedManager store={store} onClose={() => setManageCanned(false)} />}
     </div>
   )
 }

@@ -7,7 +7,7 @@ const SESSION_KEY = 'bdrflow_session_v1'
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.15.0'
+export const APP_VERSION = '1.16.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -346,6 +346,48 @@ export const TICKET_PRIORITIES = [
 ]
 export const priorityRank = (id) => (TICKET_PRIORITIES.find(p => p.id === id) || TICKET_PRIORITIES[1]).rank
 
+// ----- SLA : délai de PREMIÈRE réponse cible selon la priorité (en heures)
+export const SLA_HOURS = { urgente: 1, haute: 4, normale: 24, basse: 72 }
+export function firstResponseMs(ticket) {
+  const fs = (ticket?.messages || []).find(m => m.from === 'support')
+  return fs ? (new Date(fs.ts) - new Date(ticket.createdAt)) : null
+}
+export function slaInfo(ticket) {
+  const targetMs = (SLA_HOURS[ticket?.priority] || 24) * 3600000
+  const fr = firstResponseMs(ticket)
+  if (fr != null) return { responded: true, breached: fr > targetMs, ms: fr, targetMs }
+  if (ticket?.status === 'closed') return { responded: false, breached: false, ms: 0, targetMs }
+  const elapsed = Date.now() - new Date(ticket?.createdAt || Date.now())
+  return { responded: false, breached: elapsed > targetMs, ms: elapsed, targetMs }
+}
+export function fmtDuration(ms) {
+  if (ms == null) return '—'
+  const h = Math.floor(ms / 3600000), m = Math.round((ms % 3600000) / 60000)
+  if (h >= 24) return `${Math.floor(h / 24)} j ${h % 24} h`
+  if (h >= 1) return `${h} h ${m} min`
+  return `${m} min`
+}
+
+// Contenus support par défaut (réponses types + base de connaissances).
+function defaultCannedReplies() {
+  return [
+    { id: uid(), title: 'Accusé de réception', text: 'Bonjour, merci pour votre message. Nous prenons votre demande en charge et revenons vers vous au plus vite.' },
+    { id: uid(), title: 'Demande de précisions', text: 'Pour diagnostiquer au mieux, pourriez-vous nous préciser : les étapes pour reproduire le problème, une capture d\'écran, et le navigateur/appareil utilisé ? Merci !' },
+    { id: uid(), title: 'Correctif appliqué', text: 'Nous avons appliqué un correctif de notre côté. Pouvez-vous rafraîchir l\'application (Ctrl+Maj+R) puis nous confirmer que tout fonctionne ?' },
+    { id: uid(), title: 'Avant clôture', text: 'Sans retour de votre part sous 48 h, nous clôturerons ce ticket. Vous pourrez le rouvrir à tout moment si besoin.' },
+  ]
+}
+function defaultKbArticles() {
+  const now = new Date().toISOString()
+  const a = (title, category, content) => ({ id: uid(), title, category, content, createdAt: now, updatedAt: now })
+  return [
+    a('Réinitialiser mon mot de passe', 'Compte', "Depuis l'écran de connexion, contactez le support via un ticket : un membre de l'équipe vous aidera à réinitialiser votre accès en toute sécurité."),
+    a('Créer et gérer un rendez-vous', 'Prise en main', "Allez dans « Mes Rendez-vous » → « Créer un RDV ». Renseignez l'entreprise, la phase et la provenance. Vous pouvez ajouter plusieurs contacts et créer des sous-RDV de suivi."),
+    a('Comprendre le calcul des primes', 'Primes', "Une prime est figée au passage d'un RDV en SQL, selon le barème (effectif × source). Retrouvez le détail mois par mois dans « Primes & Commissions »."),
+    a('Importer mes contacts', 'Données', "Vos contacts se remplissent automatiquement à partir de vos RDV. L'import/export CSV-Excel est disponible depuis « Mes contacts »."),
+  ]
+}
+
 // ---------------------------------------------------------------- Seed
 function emptySubEnvData() {
   return {
@@ -548,6 +590,8 @@ function buildSeedDb() {
     clients: [], // Kanban Clients (back-office support)
     projects: [], // Gestion de projet (back-office support)
     supportTrash: [], // Corbeille du back-office support (demandes / tickets supprimés)
+    cannedReplies: defaultCannedReplies(), // réponses types du support
+    kbArticles: defaultKbArticles(), // base de connaissances
   }
 }
 
@@ -737,6 +781,8 @@ function migrate(db) {
   db.clients = db.clients || []
   db.projects = db.projects || []
   db.supportLogs = db.supportLogs || []
+  db.cannedReplies = db.cannedReplies || []
+  db.kbArticles = db.kbArticles || []
   // Champs ajoutés aux tickets existants (priorité, assignation, satisfaction)
   ;(db.tickets || []).forEach(t => {
     if (!t.priority) t.priority = 'normale'
@@ -749,6 +795,12 @@ function migrate(db) {
   // Ainsi, ce que l'utilisateur supprime ne réapparaît pas au rechargement (bug de résurrection).
   db._autoSeed = db._autoSeed || { envClients: [], envProjects: [], reqProjects: [], reqClients: [] }
   db._autoSeed.reqClients = db._autoSeed.reqClients || []
+  // Contenus support semés une seule fois (respecte les suppressions ultérieures)
+  if (!db._autoSeed.supportContent) {
+    if (!db.cannedReplies.length) db.cannedReplies = defaultCannedReplies()
+    if (!db.kbArticles.length) db.kbArticles = defaultKbArticles()
+    db._autoSeed.supportContent = true
+  }
   // Initialise l'historique des demandes déjà ingérées (demandes actuelles + supprimées) pour
   // ne jamais les ré-ingérer depuis la boîte partagée du site.
   const ingested = new Set(db._ingestedRequestIds || [])
@@ -1232,6 +1284,7 @@ export function StoreProvider({ children }) {
           const t = (d.tickets || []).find(x => x.id === ticketId)
           if (t) {
             t.status = status
+            if (status === 'closed') t.closedAt = new Date().toISOString()
             syncClientStatusFromTickets(d, t)
             const label = status === 'closed' ? 'Ticket clôturé' : status === 'in_progress' ? 'Ticket rouvert / en cours' : 'Statut du ticket modifié'
             pushSupportLog(d, { type: 'Ticket', action: label, details: `${t.category} · ${t.userName}`, actorId: account?.id || null, actorName })
@@ -1351,6 +1404,22 @@ export function StoreProvider({ children }) {
         })
       },
       deleteProject(id) { setDb(d => { d.projects = (d.projects || []).filter(p => p.id !== id); return d }) },
+      // ----- Réponses types (support)
+      addCannedReply(r) { setDb(d => { d.cannedReplies = d.cannedReplies || []; d.cannedReplies.unshift({ id: uid(), title: r.title || 'Sans titre', text: r.text || '' }); return d }) },
+      updateCannedReply(id, patch) { setDb(d => { const x = (d.cannedReplies || []).find(c => c.id === id); if (x) Object.assign(x, patch); return d }) },
+      deleteCannedReply(id) { setDb(d => { d.cannedReplies = (d.cannedReplies || []).filter(c => c.id !== id); return d }) },
+      // ----- Base de connaissances (support)
+      saveKbArticle(art) {
+        setDb(d => {
+          d.kbArticles = d.kbArticles || []
+          const now = new Date().toISOString()
+          const i = d.kbArticles.findIndex(x => x.id === art.id)
+          if (i >= 0) d.kbArticles[i] = { ...art, updatedAt: now }
+          else d.kbArticles.unshift({ ...art, id: art.id || uid(), createdAt: now, updatedAt: now })
+          return d
+        })
+      },
+      deleteKbArticle(id) { setDb(d => { d.kbArticles = (d.kbArticles || []).filter(x => x.id !== id); return d }) },
     }
   }, [db, session])
 

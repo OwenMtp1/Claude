@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -32,6 +32,7 @@ import Clients from './pages/Clients.jsx'
 import Projects from './pages/Projects.jsx'
 import SupportTrash from './pages/SupportTrash.jsx'
 import SupportLogs from './pages/SupportLogs.jsx'
+import KnowledgeBase from './pages/KnowledgeBase.jsx'
 import CompanyModal from './pages/Company.jsx'
 import GlobalSearch from './GlobalSearch.jsx'
 import Chatbot from './Chatbot.jsx'
@@ -327,6 +328,7 @@ const NAV_GROUPS = [
       { id: 'tickets', label: 'Tickets Techniques', icon: LifeBuoy, roles: SUPPORT_ROLES },
       { id: 'clients', label: 'Clients', icon: Users2, roles: SUPPORT_ROLES },
       { id: 'projects', label: 'Gestion de Projet', icon: FolderKanban, roles: SUPPORT_ROLES },
+      { id: 'kb', label: 'Base de connaissances', icon: BookOpen, roles: SUPPORT_ROLES },
       { id: 'supportlogs', label: 'Logs Support', icon: ScrollText, roles: SUPPORT_ROLES },
       { id: 'supporttrash', label: 'Corbeille', icon: Trash2, roles: SUPPORT_ROLES },
     ],
@@ -404,6 +406,7 @@ function MainApp() {
     tickets: <Tickets />,
     clients: <Clients />,
     projects: <Projects />,
+    kb: <KnowledgeBase />,
     supportlogs: <SupportLogs />,
     supporttrash: <SupportTrash />,
     kpi: <Kpi />,

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { LifeBuoy, Plus, ArrowLeft, MessageSquare, Star } from 'lucide-react'
+import { LifeBuoy, Plus, ArrowLeft, MessageSquare, Star, BookOpen, ChevronDown, ChevronRight, Search } from 'lucide-react'
 import { useStore, TICKET_CATEGORIES, TICKET_PRIORITIES, fmtDate, ticketHasUnread } from '../store.jsx'
 import { Modal, Field, Empty, toast } from '../ui.jsx'
 import TicketChat from './TicketChat.jsx'
@@ -47,6 +47,40 @@ function CsatPrompt({ ticket }) {
       <Stars value={score} onChange={setScore} />
       <input className="input text-sm" placeholder="Un commentaire (optionnel)…" value={comment} onChange={e => setComment(e.target.value)} />
       <button className="btn-primary !py-1.5 text-xs" disabled={!score} onClick={() => { store.rateTicket(ticket.id, score, comment.trim()); toast('Merci pour votre retour !') }}>Envoyer mon avis</button>
+    </div>
+  )
+}
+
+// Base de connaissances côté client (lecture seule, recherche).
+function KbBrowser() {
+  const store = useStore()
+  const articles = store.db.kbArticles || []
+  const [q, setQ] = useState('')
+  const [openId, setOpenId] = useState('')
+  if (!articles.length) return null
+  const ql = q.trim().toLowerCase()
+  const list = articles.filter(a => !ql || (a.title + ' ' + a.category + ' ' + a.content).toLowerCase().includes(ql))
+  return (
+    <div className="card p-4 space-y-2">
+      <div className="font-bold flex items-center gap-2"><BookOpen size={16} className="text-brand" /> Base de connaissances</div>
+      <p className="text-xs text-muted">Trouvez peut-être votre réponse avant d'ouvrir un ticket.</p>
+      <div className="flex items-center gap-2 rounded-xl bg-surface px-2">
+        <Search size={14} className="text-muted" />
+        <input className="input !py-1.5 border-0 !bg-transparent text-sm" placeholder="Rechercher de l'aide…" value={q} onChange={e => setQ(e.target.value)} />
+      </div>
+      <div className="space-y-1">
+        {list.slice(0, q ? 20 : 6).map(a => (
+          <div key={a.id} className="rounded-lg border border-line">
+            <button className="w-full flex items-center gap-2 px-3 py-2 text-left text-sm font-semibold" onClick={() => setOpenId(openId === a.id ? '' : a.id)}>
+              {openId === a.id ? <ChevronDown size={14} className="text-muted" /> : <ChevronRight size={14} className="text-muted" />}
+              <span className="flex-1">{a.title}</span>
+              <span className="chip bg-surface text-muted">{a.category}</span>
+            </button>
+            {openId === a.id && <p className="text-sm text-muted whitespace-pre-wrap px-3 pb-3 pl-9">{a.content}</p>}
+          </div>
+        ))}
+        {list.length === 0 && <p className="text-xs text-muted">Aucun article ne correspond.</p>}
+      </div>
     </div>
   )
 }
@@ -108,6 +142,8 @@ export default function Support() {
         <button className="btn-primary" onClick={() => setCreating(true)}><Plus size={16} /> Nouveau ticket</button>
       </div>
       <p className="text-sm text-muted -mt-2">Un problème sur l'application ? Ouvrez un ticket : l'équipe technique BD Report vous répond directement ici.</p>
+
+      <KbBrowser />
 
       {myTickets.length === 0 ? (
         <Empty text="Aucun ticket pour le moment. Créez-en un avec « Nouveau ticket »." />
