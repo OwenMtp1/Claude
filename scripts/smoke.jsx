@@ -88,7 +88,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Logs Support', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Base de connaissances', 'Logs Support', 'Gestion Administration']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -123,6 +123,9 @@ async function main() {
   await click(container.querySelector('button[title="4/5"]'))
   await click(find('button', 'Envoyer mon avis'))
   if (myTicket()?.csat?.score !== 4) throw new Error('CSAT rating not saved: ' + JSON.stringify(myTicket()?.csat))
+  // Tableau de bord CSAT côté support
+  await click(navBtn('Tickets Techniques'))
+  if (!text().includes('Satisfaction (CSAT)')) throw new Error('CSAT dashboard not shown')
   await click(navBtn('Clients'))
   // Chaque environnement existant est forcément un client (PeopleSpheres + Test).
   if (!text().includes('PeopleSpheres') || !text().includes('Test')) throw new Error('Environments not turned into clients')

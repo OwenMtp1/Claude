@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { Send, ImagePlus, X } from 'lucide-react'
+import { Send, ImagePlus, X, MessageSquareText } from 'lucide-react'
 import { useStore, ticketHasUnread } from '../store.jsx'
 import { LogoMark } from '../Brand.jsx'
 import { toast } from '../ui.jsx'
@@ -121,6 +121,16 @@ export default function TicketChat({ ticket, role }) {
             <div className="relative inline-block">
               <img src={photo} alt="" className="h-20 rounded-xl object-cover" />
               <button className="absolute -top-2 -right-2 bg-ink text-white rounded-full p-0.5" onClick={() => setPhoto('')}><X size={13} /></button>
+            </div>
+          )}
+          {role === 'support' && (store.db.cannedReplies || []).length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[11px] text-muted flex items-center gap-1"><MessageSquareText size={12} /> Réponses types :</span>
+              {(store.db.cannedReplies || []).map(r => (
+                <button key={r.id} type="button" title={r.text}
+                  className="chip bg-surface text-ink hover:bg-brand/10 hover:text-brand"
+                  onClick={() => onType(text ? text + '\n' + r.text : r.text)}>{r.title}</button>
+              ))}
             </div>
           )}
           <div className="flex items-end gap-2">
