@@ -10,12 +10,12 @@ rust-version = "1.70"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# default-features=false retire la feature "compression" de Tauri, qui tire le crate
+# `brotli` (cassé dans ses versions récentes : conflit alloc-no-stdlib 2.x vs 3.x).
+# On conserve `wry` (le moteur de rendu webview). Les assets sont juste non compressés.
+tauri = { version = "2", default-features = false, features = ["wry"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Contournement : brotli 8.0.3 (tiré par Tauri pour compresser les assets) est cassé
-# — il mélange alloc-no-stdlib 2.0.4 et 3.0.0. On épingle la version 8.0.2 (cohérente).
-brotli = "=8.0.2"
 
 [profile.release]
 opt-level = "s"
