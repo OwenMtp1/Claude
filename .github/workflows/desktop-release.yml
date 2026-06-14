@@ -60,7 +60,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'desktop-latest' }}
-          releaseName: 'BD Report Desktop ${{ github.ref_type == ''tag'' && github.ref_name || ''(dernière build)'' }}'
+          releaseName: BD Report Desktop
           releaseBody: "Téléchargez l'application de bureau BD Report pour votre système (Windows, macOS, Linux). Build non signée : au premier lancement, autorisez l'app (macOS : clic droit → Ouvrir)."
           releaseDraft: false
           prerelease: false

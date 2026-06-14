@@ -6,10 +6,6 @@ authors = ["BD Report"]
 edition = "2021"
 rust-version = "1.70"
 
-[lib]
-name = "bd_report_lib"
-crate-type = ["staticlib", "cdylib", "rlib"]
-
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
