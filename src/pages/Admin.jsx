@@ -1,7 +1,32 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus, Eye, EyeOff } from 'lucide-react'
 import { useStore, ROLES, BRICKS, uid, hashPw, isSupportRole } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
+
+// Affiche le mot de passe actuel (en clair, révélable) et permet d'en définir un nouveau.
+function PasswordCell({ u, editable, store }) {
+  const [show, setShow] = useState(false)
+  const [val, setVal] = useState('')
+  const current = u.passwordPlain
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-1">
+        <input className="input !py-1 text-xs font-mono" readOnly type={show ? 'text' : 'password'}
+          value={current || ''} placeholder={current ? '' : 'non disponible'} />
+        <button type="button" className="p-1.5 rounded-lg hover:bg-surface shrink-0" title={show ? 'Masquer' : 'Afficher'}
+          onClick={() => setShow(s => !s)} disabled={!current}>{show ? <EyeOff size={14} /> : <Eye size={14} />}</button>
+      </div>
+      {editable && (
+        <div className="flex items-center gap-1">
+          <input className="input !py-1 text-xs" placeholder="Nouveau mot de passe…" value={val} onChange={e => setVal(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && val.trim()) { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') } }} />
+          <button type="button" className="btn-ghost !py-1 text-xs shrink-0" disabled={!val.trim()}
+            onClick={() => { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') }}>Définir</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // ---- Accès aux environnements (administrateurs) : ajouter n'importe quel utilisateur à n'importe quel environnement
 function EnvAccess({ store }) {
@@ -117,9 +142,8 @@ function UserRow({ u, actor, store, onDelete }) {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
         <Field label="Mail"><input className="input" disabled={!editable} value={u.email} onChange={e => patch('email', e.target.value)} /></Field>
         <Field label="Pseudo"><input className="input" disabled={!editable} value={u.pseudo} onChange={e => patch('pseudo', e.target.value)} /></Field>
-        <Field label="Mot de passe (hashé)">
-          <input className="input" type="password" disabled={!editable} placeholder="Définir un nouveau..." defaultValue=""
-            onBlur={e => { if (e.target.value) { patch('password', hashPw(e.target.value)); e.target.value = ''; toast('Mot de passe mis à jour') } }} />
+        <Field label="Mot de passe">
+          <PasswordCell u={u} editable={editable} store={store} />
         </Field>
         <Field label="Id"><input className="input" disabled={!idEditable} defaultValue={u.id}
           onBlur={e => { if (e.target.value && e.target.value !== u.id) store.changeAccountId(u.id, e.target.value) }} /></Field>

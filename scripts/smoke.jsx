@@ -177,6 +177,17 @@ async function main() {
   await click([...container.querySelectorAll('nav button')].find(b => b.textContent.trim() === 'Leads'))
   if (!text().includes('TestCorp')) throw new Error('New RDV not visible in Leads kanban')
 
+  // 8b. Mes contacts : création manuelle d'un contact
+  await click(navBtn('Mes contacts'))
+  await click(find('button', 'Nouveau contact'))
+  await type(labelOf('Nom & Prénom').parentElement.querySelector('input'), 'Jean Test Manuel')
+  await click(find('button', 'Créer le contact'))
+  if (!text().includes('Jean Test Manuel')) throw new Error('Manual contact not created')
+
+  // 8c. Gestion Administration : le mot de passe actuel (en clair) d'Owen est visible
+  await click(navBtn('Gestion Administration'))
+  if (![...container.querySelectorAll('input')].some(i => i.value === 'demo1234')) throw new Error('Admin password not shown in clear')
+
   // 9. Organigramme + paramètres
   await click(container.querySelector('button[title="Organigramme"]'))
   if (!text().includes('Organigramme')) throw new Error('OrgChart did not render')

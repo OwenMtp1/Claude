@@ -4,6 +4,8 @@ import { fetchRemoteState, pushRemoteState, pushRemoteStateDebounced, subscribeR
 
 const LS_KEY = 'bdrflow_db_v1'
 const SESSION_KEY = 'bdrflow_session_v1'
+const REMEMBER_KEY = 'bdrflow_remember_v1' // « rester connecté 30 jours »
+const CREDS_KEY = 'bdrflow_creds_v1'       // identifiants enregistrés (pré-remplissage)
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
@@ -771,9 +773,12 @@ function migrate(db) {
     })
     // Offre par défaut : les comptes existants gardent l'accès complet (beta)
     if (!a.plan) a.plan = 'beta'
-    // Hashage des mots de passe hérités stockés en clair
-    if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
+    // Hashage des mots de passe hérités stockés en clair (en conservant le clair pour l'admin)
+    if (a.password && !String(a.password).startsWith('sha256:')) { if (!a.passwordPlain) a.passwordPlain = a.password; a.password = hashPw(a.password) }
   })
+  // Rétro-compatibilité : restaure le mot de passe en clair des comptes de démo connus.
+  const SEED_PW = { '01': 'demo1234', 'test-julie': 'test1234', 'test-sarah': 'test1234', 'test-thomas': 'test1234', 'test-karim': 'test1234' }
+  ;(db.accounts || []).forEach(a => { if (!a.passwordPlain && SEED_PW[a.id]) a.passwordPlain = SEED_PW[a.id] })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Données globales support (partagées entre tous les comptes support)
   db.supportRequests = db.supportRequests || []
@@ -863,7 +868,13 @@ function load() {
 export function StoreProvider({ children }) {
   const [db, setDbState] = useState(load)
   const [session, setSession] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem(SESSION_KEY)) } catch (e) { return null }
+    try { const s = JSON.parse(sessionStorage.getItem(SESSION_KEY)); if (s) return s } catch (e) { /* ignore */ }
+    // « Rester connecté 30 jours » : restaure une session si le jeton est encore valide.
+    try {
+      const rem = JSON.parse(localStorage.getItem(REMEMBER_KEY))
+      if (rem && rem.accountId && rem.expires > Date.now()) return { accountId: rem.accountId, envId: null, subEnvId: null, welcomed: true }
+    } catch (e) { /* ignore */ }
+    return null
   })
   const [uiLang, setUiLangState] = useState(() => localStorage.getItem('bdr_lang') || 'fr')
 
@@ -996,24 +1007,33 @@ export function StoreProvider({ children }) {
         localStorage.setItem('bdr_lang', lang)
         if (account) setDb(d => { const a = d.accounts.find(x => x.id === account.id); if (a) a.lang = lang; return d })
       },
-      login(identifier, password) {
+      login(identifier, password, opts = {}) {
         const acc = db.accounts.find(a =>
           (a.email.toLowerCase() === identifier.toLowerCase() || a.pseudo.toLowerCase() === identifier.toLowerCase())
           && checkPw(password, a.password))
-        if (acc) setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
+        if (acc) {
+          setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
+          // « Rester connecté 30 jours »
+          if (opts.remember) localStorage.setItem(REMEMBER_KEY, JSON.stringify({ accountId: acc.id, expires: Date.now() + 30 * 86400000 }))
+          else localStorage.removeItem(REMEMBER_KEY)
+          // « Enregistrer mon mot de passe » (pré-remplissage de l'écran de connexion)
+          if (opts.savePw) localStorage.setItem(CREDS_KEY, JSON.stringify({ id: identifier, pw: password }))
+          else localStorage.removeItem(CREDS_KEY)
+        }
         return acc
       },
+      getSavedCreds() { try { return JSON.parse(localStorage.getItem(CREDS_KEY)) } catch (e) { return null } },
       register({ email, pseudo, password }) {
         if (db.accounts.some(a => a.email.toLowerCase() === email.toLowerCase())) return { error: 'Un compte existe déjà avec cet email.' }
         const wanted = (pseudo || email.split('@')[0]).trim()
         if (wanted && db.accounts.some(a => a.pseudo.toLowerCase() === wanted.toLowerCase())) return { error: 'Ce pseudo est déjà pris, choisissez-en un autre.' }
         // Inscription libre = offre Starter (accès très limité), avec son propre environnement starter.
-        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
+        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), passwordPlain: password, role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
       },
-      logout() { setSession(null) },
+      logout() { setSession(null); localStorage.removeItem(REMEMBER_KEY) },
       enterEnv(envId) { setSession(s => ({ ...s, envId, subEnvId: null })) },
       setCurrency(c) { if (roBlocked()) return; setDb(d => { if (session?.subEnvId && d.data[session.subEnvId]) d.data[session.subEnvId].currency = c; return d }); setCurrentCurrency(c) },
       enterSubEnv(subEnvId) {
@@ -1060,6 +1080,12 @@ export function StoreProvider({ children }) {
         if (!subId) return
         if (readOnly) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule : abonnement résilié ou bloqué. Seul le support reste accessible.' })); return }
         setDb(d => { d.data[subId] = fn(d.data[subId]); return d })
+      },
+      // Met à jour les données d'un sous-environnement précis (ex : pipeline entreprise, leads d'un collègue).
+      setSubData(subId, fn) {
+        if (!subId) return
+        if (readOnly) { window.dispatchEvent(new CustomEvent('app-toast', { detail: '🔒 Accès en lecture seule.' })); return }
+        setDb(d => { if (d.data[subId]) d.data[subId] = fn(d.data[subId]); return d })
       },
       // ----- journal d'audit (traçabilité)
       logAction(type, action, details = '') {
@@ -1145,9 +1171,14 @@ export function StoreProvider({ children }) {
         const env = db.environments.find(e => e.id === session?.envId)
         const plan = acc.plan || env?.plan || 'beta'
         const a = { id: uid(), role: 'Membre', developer: false, plan, photo: '', bricks: [...(PLANS[plan]?.bricks || BRICKS)], teamOf: null, ...acc, plan }
-        if (a.password && !String(a.password).startsWith('sha256:')) a.password = hashPw(a.password)
+        if (a.password && !String(a.password).startsWith('sha256:')) { a.passwordPlain = a.password; a.password = hashPw(a.password) }
         setDb(d => { d.accounts.push(a); return d })
         return a
+      },
+      // Définit un nouveau mot de passe (stocke le hash pour l'auth + le clair pour l'affichage admin).
+      setAccountPassword(id, plain) {
+        if (roBlocked()) return
+        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); a.passwordPlain = plain } return d })
       },
       // ----- Identité de l'utilisateur courant pour le support (prénom + photo, sinon logo BD Report)
       currentIdentity() {
