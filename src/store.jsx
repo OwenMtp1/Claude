@@ -9,7 +9,7 @@ const CREDS_KEY = 'bdrflow_creds_v1'       // identifiants enregistrés (pré-re
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.16.0'
+export const APP_VERSION = '1.17.0'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -272,7 +272,7 @@ export const RDV_FIELDS = [
 
 export const BRICKS = [
   'Dashboard', 'Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes',
-  'Primes & Commissions', 'KPI Entreprise', 'Dashboard personnalisé', 'Logs',
+  'Primes & Commissions', 'KPI Entreprise', 'ICP', 'Dashboard personnalisé', 'Logs',
 ]
 
 // ---------------------------------------------------------------- Offres (plans)
@@ -426,6 +426,7 @@ function emptySubEnvData() {
     currency: 'EUR', // devise des primes (EUR ou USD)
     tasks: [], // Mes tâches : { id, title, description, dueDate, assignee, company, contact, rdvId, done, archived, pinned, createdAt }
     taskTrash: [], // corbeille des tâches : restaurables 30 jours
+    icpProfiles: [], // profils ICP enregistrés : { id, name, secteurs[], effMin, effMax, postes[], createdAt }
   }
 }
 
@@ -768,7 +769,7 @@ function migrate(db) {
     a.bricks = a.bricks || []
     // Renommage de la brique "Tâches prioritaires" → "Recommandations prioritaires"
     a.bricks = a.bricks.map(b => b === 'Tâches prioritaires' ? 'Recommandations prioritaires' : b)
-    ;['Recommandations prioritaires', 'Mes tâches', 'Logs'].forEach(b => {
+    ;['Recommandations prioritaires', 'Mes tâches', 'ICP', 'Logs'].forEach(b => {
       if (a.bricks.includes('Leads') && !a.bricks.includes(b)) a.bricks.push(b)
     })
     // Offre par défaut : les comptes existants gardent l'accès complet (beta)
@@ -853,6 +854,7 @@ function migrate(db) {
     data.currency = data.currency || 'EUR'
     data.tasks = data.tasks || []
     data.taskTrash = data.taskTrash || []
+    data.icpProfiles = data.icpProfiles || []
   })
   return db
 }

@@ -21,6 +21,7 @@ const DICT = {
   'page.dashboard': { fr: 'Dashboard', en: 'Dashboard', es: 'Panel' },
   'page.ai': { fr: 'Dashboard personnalisé', en: 'Custom dashboard', es: 'Panel personalizado' },
   'page.kpi': { fr: 'KPI Entreprise', en: 'Company KPIs', es: 'KPIs de empresa' },
+  'page.icp': { fr: 'ICP', en: 'ICP', es: 'ICP' },
   'page.teamlead': { fr: 'Pilotage équipe', en: 'Team steering', es: 'Dirección de equipo' },
   'page.rdv': { fr: 'Mes Rendez-vous', en: 'My Meetings', es: 'Mis Citas' },
   'page.leads': { fr: 'Leads', en: 'Leads', es: 'Leads' },
