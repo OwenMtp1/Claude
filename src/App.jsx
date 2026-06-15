@@ -397,6 +397,9 @@ function MainApp() {
   useEffect(() => { const t = setTimeout(() => setBooting(false), 350); return () => clearTimeout(t) }, [session.subEnvId])
   const goto = (id) => { setPage(id); setSidebarOpen(false) }
 
+  // Au changement d'onglet, remonter automatiquement en haut de la page.
+  useEffect(() => { window.scrollTo({ top: 0, left: 0, behavior: 'auto' }) }, [page])
+
   // Navigation déclenchée par d'autres composants (ex : l'assistant IA renvoie vers le Support).
   useEffect(() => {
     const h = (e) => { if (e.detail) goto(e.detail) }
