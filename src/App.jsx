@@ -41,16 +41,19 @@ import Chatbot from './Chatbot.jsx'
 function Login() {
   const store = useStore()
   const { t, lang } = useT()
+  const saved = store.getSavedCreds ? store.getSavedCreds() : null
   const [mode, setMode] = useState('login')
-  const [id, setId] = useState('')
-  const [pw, setPw] = useState('')
+  const [id, setId] = useState(saved?.id || '')
+  const [pw, setPw] = useState(saved?.pw || '')
   const [pseudo, setPseudo] = useState('')
   const [err, setErr] = useState('')
+  const [remember, setRemember] = useState(false)
+  const [savePw, setSavePw] = useState(!!saved)
 
   const submit = () => {
     setErr('')
     if (mode === 'login') {
-      const acc = store.login(id.trim(), pw)
+      const acc = store.login(id.trim(), pw, { remember, savePw })
       if (!acc) setErr(t('login.errBad'))
     } else {
       if (!id.includes('@')) { setErr(t('login.errEmail')); return }
@@ -86,6 +89,18 @@ function Login() {
           {mode === 'register' && <input className="input !bg-gray-50" placeholder={t('login.userph')} value={pseudo} onChange={e => setPseudo(e.target.value)} />}
           <input className="input !bg-gray-50" type="password" placeholder={t('login.pwph')} value={pw} onChange={e => setPw(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && submit()} />
+          {mode === 'login' && (
+            <div className="flex flex-col gap-1.5 text-xs text-gray-600">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={remember} onChange={e => setRemember(e.target.checked)} />
+                Rester connecté pendant 30 jours (ne plus demander le mot de passe)
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={savePw} onChange={e => setSavePw(e.target.checked)} />
+                Enregistrer mon mot de passe sur cet appareil
+              </label>
+            </div>
+          )}
           {err && <p className="text-red-500 text-xs">{err}</p>}
           <button className="w-full btn-primary justify-center !py-2.5" onClick={submit}>
             {mode === 'login' ? t('login.signin') : t('login.signup')}

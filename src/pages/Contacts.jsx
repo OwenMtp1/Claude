@@ -1,9 +1,11 @@
 import React, { useRef, useState } from 'react'
-import { Download, Upload, Trash2, Search, FileSpreadsheet } from 'lucide-react'
+import { Download, Upload, Trash2, Search, FileSpreadsheet, Plus } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { useStore, uid, todayISO, fmtDate, SOURCES } from '../store.jsx'
-import { Empty, Confirm, Select, toast } from '../ui.jsx'
+import { Empty, Confirm, Select, Modal, Field, toast } from '../ui.jsx'
 import { openCompany } from './Company.jsx'
+
+function emptyContact() { return { nom: '', poste: '', entreprise: '', email: '', tel: '', secteur: '', linkedin: '', source: '' } }
 
 const COLS = [
   ['nom', 'Nom & Prénom'], ['poste', 'Poste'], ['entreprise', 'Entreprise'],
@@ -69,7 +71,16 @@ export default function Contacts() {
   const [fSource, setFSource] = useState('')
   const [fSecteur, setFSecteur] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
+  const [form, setForm] = useState(null) // contact en cours de création
   const fileRef = useRef(null)
+
+  const createContact = () => {
+    if (!form.nom.trim() && !form.email.trim()) { toast('Renseignez au moins un nom ou un email.'); return }
+    store.setSub(d => ({ ...d, contacts: [...d.contacts, { ...form, id: uid(), createdAt: todayISO() }] }))
+    store.logAction('Contact', 'Contact créé manuellement', form.nom || form.email)
+    toast('Contact créé')
+    setForm(null)
+  }
 
   const allOf = (key) => [...new Set(sub.contacts.map(c => c[key]).filter(Boolean))].sort()
   const hasFilters = !!(q || fEntreprise || fPoste || fSource || fSecteur)
@@ -137,7 +148,8 @@ export default function Contacts() {
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-xl font-extrabold">Mes contacts <span className="text-muted text-sm font-semibold">({sub.contacts.length})</span></h2>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <button className="btn-primary text-xs" onClick={() => setForm(emptyContact())}><Plus size={14} /> Nouveau contact</button>
           <input type="file" accept=".csv" ref={fileRef} className="hidden" onChange={e => { if (e.target.files[0]) importCSV(e.target.files[0]); e.target.value = '' }} />
           <button className="btn-ghost text-xs" onClick={() => fileRef.current.click()}><Upload size={14} /> Importer CSV</button>
           <button className="btn-ghost text-xs" onClick={() => exportCSV(false)}>
@@ -175,7 +187,7 @@ export default function Contacts() {
             </tr>
           </thead>
           <tbody>
-            {contacts.length === 0 && <tr><td colSpan={COLS.length + 1}><Empty text="Aucun contact. Ils sont ajoutés automatiquement à chaque création de RDV." /></td></tr>}
+            {contacts.length === 0 && <tr><td colSpan={COLS.length + 1}><Empty text="Aucun contact. Créez-en un avec « Nouveau contact », importez un CSV, ou ils s'ajoutent automatiquement à chaque RDV." /></td></tr>}
             {contacts.map(c => (
               <tr key={c.id} className="border-t border-line hover:bg-surface/60">
                 <td className="py-2 pl-3"><input type="checkbox" checked={selected.has(c.id)} onChange={() => toggle(c.id)} /></td>
@@ -193,6 +205,25 @@ export default function Contacts() {
           </tbody>
         </table>
       </div>
+
+      {form && (
+        <Modal title="Nouveau contact" onClose={() => setForm(null)}>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Nom & Prénom"><input className="input" value={form.nom} onChange={e => setForm(f => ({ ...f, nom: e.target.value }))} autoFocus /></Field>
+            <Field label="Poste"><input className="input" value={form.poste} onChange={e => setForm(f => ({ ...f, poste: e.target.value }))} /></Field>
+            <Field label="Entreprise"><input className="input" value={form.entreprise} onChange={e => setForm(f => ({ ...f, entreprise: e.target.value }))} /></Field>
+            <Field label="Secteur"><input className="input" value={form.secteur} onChange={e => setForm(f => ({ ...f, secteur: e.target.value }))} /></Field>
+            <Field label="Email"><input className="input" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
+            <Field label="Téléphone"><input className="input" value={form.tel} onChange={e => setForm(f => ({ ...f, tel: e.target.value }))} /></Field>
+            <Field label="LinkedIn"><input className="input" value={form.linkedin} onChange={e => setForm(f => ({ ...f, linkedin: e.target.value }))} placeholder="https://linkedin.com/in/…" /></Field>
+            <Field label="Source"><Select value={form.source} onChange={v => setForm(f => ({ ...f, source: v }))} options={SOURCES} placeholder="—" /></Field>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <button className="btn-ghost" onClick={() => setForm(null)}>Annuler</button>
+            <button className="btn-primary" onClick={createContact}>Créer le contact</button>
+          </div>
+        </Modal>
+      )}
 
       {confirmDel && (
         <Confirm message={`Supprimer ${selected.size} contact(s) ?`}

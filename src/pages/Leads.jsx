@@ -93,7 +93,7 @@ export default function Leads() {
 
   // Vue entreprise : agrège les RDV de tous les espaces de l'environnement, avec leur propriétaire.
   const envSubs = store.db.subenvs.filter(s => s.envId === store.session.envId)
-  const orgRdvs = envSubs.flatMap(s => (store.db.data[s.id]?.rdvs || []).map(r => ({ ...r, _owner: `${s.prenom} ${s.nom}` })))
+  const orgRdvs = envSubs.flatMap(s => (store.db.data[s.id]?.rdvs || []).map(r => ({ ...r, _owner: `${s.prenom} ${s.nom}`, _subId: s.id })))
   const ownerOptions = [...new Set(envSubs.map(s => `${s.prenom} ${s.nom}`))]
   const inRange = (d, range) => {
     if (!range.start && !range.end) return true
@@ -111,12 +111,15 @@ export default function Leads() {
   const hasFilter = fOwner || fOpen.start || fOpen.end || fClose.start || fClose.end || fActivity.start || fActivity.end
 
   const drop = (opp) => {
-    if (!dragKey || scope === 'org') { setDragKey(null); return }
-    // Le RDV représentatif est résolu hors de l'updater pour éviter tout double effet (StrictMode).
-    const group = groupByCompany(sub.rdvs).find(g => g.key === dragKey)
+    if (!dragKey) { setDragKey(null); return }
+    // Glisser-déposer dans MON pipeline ou celui de l'entreprise (RDV d'un collègue).
+    const group = groupByCompany(scope === 'me' ? sub.rdvs : orgRdvs).find(g => g.key === dragKey)
     if (group && group.rep.opportunite !== opp) {
-      store.setSub(d => {
-        const r = d.rdvs.find(x => x.id === group.rep.id)
+      const repId = group.rep.id
+      const subId = scope === 'me' ? store.session.subEnvId : group.rep._subId
+      // applyRdvAutomations met aussi à jour la PHASE de transaction (Gagnée→SQL, Perdue→KO, Signée…).
+      store.setSubData(subId, d => {
+        const r = d.rdvs.find(x => x.id === repId)
         if (r) Object.assign(r, applyRdvAutomations(r, { opportunite: opp }))
         return d
       })
@@ -153,8 +156,8 @@ export default function Leads() {
       </div>
       <p className="text-xs text-muted -mt-2">
         {scope === 'me'
-          ? "Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut d'opportunité."
-          : 'Vue partagée de toute l\'organisation (lecture). Ouvrez une fiche entreprise pour laisser un commentaire visible par tous les membres.'}
+          ? "Une carte = une entreprise (pas de doublon). Glissez-déposez pour changer son statut — la phase de transaction est mise à jour automatiquement."
+          : "Vue de toute l'organisation. Glissez-déposez les leads de chaque collègue pour changer leur statut (et leur phase). Ouvrez une fiche entreprise pour un commentaire partagé."}
       </p>
 
       <div className="card p-3 flex items-end gap-3 flex-wrap text-xs">
@@ -195,9 +198,9 @@ export default function Leads() {
                 {cards.map(g => {
                   const nbComments = store.companyComments(g.entreprise).length
                   return (
-                    <div key={g.key} draggable={scope === 'me'} onDragStart={() => setDragKey(g.key)} onDragEnd={() => setDragKey(null)}
-                      onTouchStart={() => scope === 'me' && setDragKey(g.key)} onTouchEnd={touchDrop}
-                      className={`card !rounded-xl p-3 ${scope === 'me' ? 'cursor-grab active:cursor-grabbing touch-none' : ''} ${dragKey === g.key ? 'dragging' : ''}`}>
+                    <div key={g.key} draggable onDragStart={() => setDragKey(g.key)} onDragEnd={() => setDragKey(null)}
+                      onTouchStart={() => setDragKey(g.key)} onTouchEnd={touchDrop}
+                      className={`card !rounded-xl p-3 cursor-grab active:cursor-grabbing touch-none ${dragKey === g.key ? 'dragging' : ''}`}>
                       <button className="font-bold text-sm flex items-center gap-1.5 hover:text-brand hover:underline" title="Ouvrir la fiche entreprise"
                         onClick={() => openCompany(g.entreprise)}><Building2 size={13} className="text-muted shrink-0" /> {g.entreprise}</button>
                       <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
