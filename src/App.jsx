@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import {
   LayoutDashboard, CalendarDays, KanbanSquare, BookUser, StickyNote, Coins,
   Table2, Shield, Users, Settings as SettingsIcon, Network, LogOut, Plus, Sparkles, Lock, ArrowLeft, Code2, ListChecks, Search,
-  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen,
+  ScrollText, ChevronDown, ChevronRight, Menu, X, Trash2, Gauge, Bell, CheckSquare, LifeBuoy, Inbox, Users2, FolderKanban, BookOpen, Target,
 } from 'lucide-react'
 import { useStore, APP_VERSION, setCurrentCurrency, allowedBricks, PLANS, SUPPORT_ROLES, ticketHasUnread } from './store.jsx'
 import { Logo, LogoMark, Wordmark, SplashScreen } from './Brand.jsx'
@@ -19,6 +19,7 @@ import Notes from './pages/Notes.jsx'
 import Primes from './pages/Primes.jsx'
 import Admin from './pages/Admin.jsx'
 import Kpi from './pages/Kpi.jsx'
+import Icp from './pages/Icp.jsx'
 import Settings from './pages/Settings.jsx'
 import OrgChart from './pages/OrgChart.jsx'
 import AiDashboard from './pages/AiDashboard.jsx'
@@ -308,6 +309,7 @@ const NAV_GROUPS = [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, brick: 'Dashboard' },
       { id: 'ai', label: 'Dashboard personnalisé', icon: Sparkles, brick: 'Dashboard personnalisé' },
       { id: 'kpi', label: 'KPI Entreprise', icon: Table2, brick: 'KPI Entreprise', roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
+      { id: 'icp', label: 'ICP', icon: Target, brick: 'ICP' },
       { id: 'teamlead', label: 'Pilotage équipe', icon: Gauge, roles: ['Manager', 'Administrateur', 'Fondateur', 'Support BD Report'] },
     ],
   },
@@ -425,6 +427,7 @@ function MainApp() {
     supportlogs: <SupportLogs />,
     supporttrash: <SupportTrash />,
     kpi: <Kpi />,
+    icp: <Icp />,
     teamlead: <TeamLead />,
     admin: <Admin mode="admin" />,
     teams: <Admin mode="teams" />,

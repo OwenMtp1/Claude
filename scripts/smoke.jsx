@@ -88,7 +88,7 @@ async function main() {
   if (!text().includes('RDV réalisés')) throw new Error('Dashboard missing: ' + text().slice(0, 400))
 
   // 6. Navigation sur chaque page
-  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Base de connaissances', 'Logs Support', 'Gestion Administration']) {
+  for (const label of ['Mes Rendez-vous', 'Leads', 'Recommandations prioritaires', 'Mes tâches', 'Mes contacts', 'Mes notes', 'Logs', 'Primes & Commissions', 'Dashboard personnalisé', 'KPI Entreprise', 'ICP', 'Support', 'Nouvelles demandes', 'Tickets Techniques', 'Clients', 'Gestion de Projet', 'Base de connaissances', 'Logs Support', 'Gestion Administration']) {
     // .replace(/\d+$/,'') : certains onglets portent une pastille de messages/demandes non lus
     const btn = [...container.querySelectorAll('nav button')].find(b => b.textContent.trim().replace(/\d+$/, '').trim() === label)
     if (!btn) throw new Error('Nav button missing: ' + label)
@@ -187,6 +187,13 @@ async function main() {
   // 8c. Gestion Administration : le mot de passe actuel (en clair) d'Owen est visible
   await click(navBtn('Gestion Administration'))
   if (![...container.querySelectorAll('input')].some(i => i.value === 'Elisaowen2003.')) throw new Error('Admin password not shown in clear')
+
+  // 8d. ICP : page rendue + création d'un profil sur mesure
+  await click(navBtn('ICP'))
+  if (!text().includes('Moyenne globale')) throw new Error('ICP page did not render')
+  await click(find('button', 'Créer un profil'))
+  await click(find('button', 'Créer le profil'))
+  if (!text().includes('Mes profils ICP')) throw new Error('ICP custom profile not created')
 
   // 9. Organigramme + paramètres
   await click(container.querySelector('button[title="Organigramme"]'))
