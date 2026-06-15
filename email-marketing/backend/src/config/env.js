@@ -12,10 +12,13 @@ const required = (key, fallback) => {
 export const env = {
   port: parseInt(process.env.PORT || '4000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
-  publicBaseUrl: required('PUBLIC_BASE_URL', 'http://localhost:4000'),
+  // Sur Render, RENDER_EXTERNAL_URL est injecté automatiquement (service web).
+  publicBaseUrl: process.env.PUBLIC_BASE_URL || process.env.RENDER_EXTERNAL_URL || 'http://localhost:4000',
   frontendUrl: required('FRONTEND_URL', 'http://localhost:5173'),
 
   databaseUrl: required('DATABASE_URL'),
+  // Supabase / Postgres managés exigent TLS. Détecté via la chaîne (?sslmode=require) ou DATABASE_SSL=true.
+  databaseSsl: /sslmode=require/i.test(process.env.DATABASE_URL || '') || process.env.DATABASE_SSL === 'true',
   tokenEncryptionKey: required('TOKEN_ENCRYPTION_KEY'),
   appSharedSecret: required('APP_SHARED_SECRET', 'dev-secret'),
 

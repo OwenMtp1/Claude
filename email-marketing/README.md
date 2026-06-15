@@ -98,6 +98,26 @@ npm install
 npm run dev                 # http://localhost:5173
 ```
 
+## Déploiement Supabase + Render (recommandé)
+
+Le module a besoin d'un serveur persistant + Postgres : on réutilise la base **Supabase** du CRM
+et on héberge le backend sur **Render** via le blueprint `render.yaml` (à la racine du repo).
+
+1. **Base de données** — Supabase → SQL Editor → coller `db/schema.sql` → Run. Récupérer la chaîne
+   de connexion dans Project Settings → Database → Connection string (URI), suffixée de `?sslmode=require`.
+2. **Backend** — Render → New → Blueprint → sélectionner ce repo. Render crée le service web + le worker
+   et demande de remplir le groupe `bdreport-email-env` :
+   - `DATABASE_URL` = chaîne Supabase · `DATABASE_SSL=true`
+   - `TOKEN_ENCRYPTION_KEY` = `openssl rand -hex 32` · `APP_SHARED_SECRET` = généré par Render
+   - `PUBLIC_BASE_URL` = l'URL Render du service web (à coller après le 1er déploiement)
+   - `FRONTEND_URL` = l'URL de ton app (CORS)
+   - `GOOGLE_*` / `MS_*` = identifiants OAuth (les URI de redirection pointent sur `PUBLIC_BASE_URL`)
+3. **OAuth** — déclarer les URI de redirection `https://<backend>/api/accounts/oauth/{gmail|outlook}/callback`
+   dans Google Cloud Console / Azure AD.
+
+Le reste du CRM continue d'être publié par GitHub Actions sur `gh-pages` : ce blueprint ne touche
+que `email-marketing/`.
+
 ## Intégration au CRM existant
 - **Composants** : les pages (`Campaigns`, `Messaging`, `Analytics`, `Settings`) et composants
   (`EmailEditor`, `ContactSelector`, `CampaignBuilder`, `Inbox`) sont du React standard et peuvent être

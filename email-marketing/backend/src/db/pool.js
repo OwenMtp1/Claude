@@ -7,6 +7,8 @@ export const pool = new pg.Pool({
   connectionString: env.databaseUrl,
   max: 10,
   idleTimeoutMillis: 30_000,
+  // Supabase et la plupart des Postgres managés imposent une connexion TLS.
+  ssl: env.databaseSsl ? { rejectUnauthorized: false } : undefined,
 })
 
 pool.on('error', (err) => {

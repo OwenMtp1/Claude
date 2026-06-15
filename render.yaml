@@ -1,0 +1,77 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Render Blueprint — Module Marketing Email (backend + worker)
+#  Déploiement : render.com → New → Blueprint → sélectionne ce repo.
+#  Render lit ce fichier, crée les 2 services et te demande de remplir le groupe
+#  de variables « bdreport-email-env » (une seule fois, partagé par les 2 services).
+#
+#  Le reste du CRM (site + app) reste déployé par GitHub Actions sur gh-pages :
+#  ce blueprint ne concerne QUE le sous-projet email-marketing/.
+# ─────────────────────────────────────────────────────────────────────────────
+
+envVarGroups:
+  - name: bdreport-email-env
+    envVars:
+      # Base Supabase existante : Project Settings → Database → Connection string (URI).
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_SSL
+        value: "true"                      # Supabase exige TLS
+      # Clé de chiffrement des jetons OAuth (AES-256-GCM) : 64 caractères hex.
+      # Génère-la en local : openssl rand -hex 32  → colle ici.
+      - key: TOKEN_ENCRYPTION_KEY
+        sync: false
+      # Secret partagé CRM ↔ backend (signature d'identité). Généré automatiquement.
+      - key: APP_SHARED_SECRET
+        generateValue: true
+      # URL publique du backend (liens de tracking + redirections OAuth).
+      # Après le 1er déploiement, colle ici l'URL Render du service web (https://...onrender.com).
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # URL du frontend autorisée par CORS (ton app, ex. https://owenmtp1.github.io).
+      - key: FRONTEND_URL
+        sync: false
+      # OAuth Gmail (Google Cloud Console → Identifiants OAuth « Application Web »).
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false                        # https://<backend>/api/accounts/oauth/gmail/callback
+      # OAuth Outlook (Azure AD → App registration). Facultatif au départ.
+      - key: MS_CLIENT_ID
+        sync: false
+      - key: MS_CLIENT_SECRET
+        sync: false
+      - key: MS_TENANT
+        value: common
+      - key: MS_REDIRECT_URI
+        sync: false                        # https://<backend>/api/accounts/oauth/outlook/callback
+      # Générateur d'emails IA (facultatif). Vide = repli sur templates locaux.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+
+services:
+  # API web
+  - type: web
+    name: bdreport-email-api
+    runtime: node
+    plan: free
+    rootDir: email-marketing/backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - fromGroup: bdreport-email-env
+
+  # Worker : séquences (cron) + synchro inbox / détection des réponses
+  - type: worker
+    name: bdreport-email-worker
+    runtime: node
+    plan: free
+    rootDir: email-marketing/backend
+    buildCommand: npm install
+    startCommand: npm run worker
+    envVars:
+      - fromGroup: bdreport-email-env
