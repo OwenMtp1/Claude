@@ -1,29 +1,19 @@
 import React, { useState } from 'react'
-import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus, Eye, EyeOff } from 'lucide-react'
+import { Plus, Trash2, ChevronDown, ChevronRight, Users, Globe, UserPlus } from 'lucide-react'
 import { useStore, ROLES, BRICKS, uid, hashPw, isSupportRole } from '../store.jsx'
 import { Modal, Field, Confirm, Empty, toast } from '../ui.jsx'
 
-// Affiche le mot de passe actuel (en clair, révélable) et permet d'en définir un nouveau.
+// Réinitialise le mot de passe d'un compte. Les mots de passe ne sont jamais
+// stockés ni affichés en clair (sécurité) : on ne peut que définir un nouveau.
 function PasswordCell({ u, editable, store }) {
-  const [show, setShow] = useState(false)
   const [val, setVal] = useState('')
-  const current = u.passwordPlain
+  const reset = () => { if (val.trim()) { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') } }
+  if (!editable) return <span className="text-xs text-muted">••••••••</span>
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-1">
-        <input className="input !py-1 text-xs font-mono" readOnly type={show ? 'text' : 'password'}
-          value={current || ''} placeholder={current ? '' : 'non disponible'} />
-        <button type="button" className="p-1.5 rounded-lg hover:bg-surface shrink-0" title={show ? 'Masquer' : 'Afficher'}
-          onClick={() => setShow(s => !s)} disabled={!current}>{show ? <EyeOff size={14} /> : <Eye size={14} />}</button>
-      </div>
-      {editable && (
-        <div className="flex items-center gap-1">
-          <input className="input !py-1 text-xs" placeholder="Nouveau mot de passe…" value={val} onChange={e => setVal(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && val.trim()) { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') } }} />
-          <button type="button" className="btn-ghost !py-1 text-xs shrink-0" disabled={!val.trim()}
-            onClick={() => { store.setAccountPassword(u.id, val.trim()); setVal(''); toast('Mot de passe mis à jour') }}>Définir</button>
-        </div>
-      )}
+    <div className="flex items-center gap-1">
+      <input className="input !py-1 text-xs" placeholder="Nouveau mot de passe…" value={val} onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') reset() }} />
+      <button type="button" className="btn-ghost !py-1 text-xs shrink-0" disabled={!val.trim()} onClick={reset}>Réinitialiser</button>
     </div>
   )
 }

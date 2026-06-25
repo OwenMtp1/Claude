@@ -186,9 +186,9 @@ async function main() {
   await click(find('button', 'Créer le contact'))
   if (!text().includes('Jean Test Manuel')) throw new Error('Manual contact not created')
 
-  // 8c. Gestion Administration : le mot de passe actuel (en clair) d'Owen est visible
+  // 8c. Gestion Administration : la page rend, et AUCUN mot de passe en clair n'est exposé (sécurité)
   await click(navBtn('Gestion Administration'))
-  if (![...container.querySelectorAll('input')].some(i => i.value === 'Elisaowen2003.')) throw new Error('Admin password not shown in clear')
+  if ([...container.querySelectorAll('input')].some(i => i.value === 'Elisaowen2003.')) throw new Error('Admin must not expose plaintext password')
 
   // 8d. ICP : page rendue + création d'un profil sur mesure
   await click(navBtn('ICP'))
