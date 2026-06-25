@@ -9,7 +9,7 @@ const CREDS_KEY = 'bdrflow_creds_v1'       // identifiants enregistrés (pré-re
 // Boîte de réception partagée site ↔ app (même origine owenmtp1.github.io) : le
 // formulaire de contact du site y dépose ses messages, l'app les y récupère.
 export const CONTACT_INBOX_KEY = 'bdrflow_contact_inbox_v1'
-export const APP_VERSION = '1.18.0'
+export const APP_VERSION = '1.18.1'
 
 // ---------------------------------------------------------------- Format monétaire
 export const CURRENCIES = { EUR: { symbol: '€', code: 'EUR' }, USD: { symbol: '$', code: 'USD' } }
@@ -850,12 +850,10 @@ function migrate(db) {
     })
     // Offre par défaut : les comptes existants gardent l'accès complet (beta)
     if (!a.plan) a.plan = 'beta'
-    // Hashage des mots de passe hérités stockés en clair (en conservant le clair pour l'admin)
-    if (a.password && !String(a.password).startsWith('sha256:')) { if (!a.passwordPlain) a.passwordPlain = a.password; a.password = hashPw(a.password) }
+    // Hashage des mots de passe hérités + purge de tout mot de passe en clair (sécurité : jamais stocké).
+    if (a.password && !String(a.password).startsWith('sha256:')) { a.password = hashPw(a.password) }
+    delete a.passwordPlain
   })
-  // Rétro-compatibilité : restaure le mot de passe en clair des comptes de démo connus.
-  const SEED_PW = { '01': 'demo1234', 'test-julie': 'test1234', 'test-sarah': 'test1234', 'test-thomas': 'test1234', 'test-karim': 'test1234' }
-  ;(db.accounts || []).forEach(a => { if (!a.passwordPlain && SEED_PW[a.id]) a.passwordPlain = SEED_PW[a.id] })
   ;(db.environments || []).forEach(e => { if (!e.plan) e.plan = 'beta' })
   // Données globales support (partagées entre tous les comptes support)
   db.supportRequests = db.supportRequests || []
@@ -1136,7 +1134,7 @@ export function StoreProvider({ children }) {
         const wanted = (pseudo || email.split('@')[0]).trim()
         if (wanted && db.accounts.some(a => a.pseudo.toLowerCase() === wanted.toLowerCase())) return { error: 'Ce pseudo est déjà pris, choisissez-en un autre.' }
         // Inscription libre = offre Starter (accès très limité), avec son propre environnement starter.
-        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), passwordPlain: password, role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
+        const acc = { id: uid(), email, pseudo: wanted, password: hashPw(password), role: 'Fondateur', developer: false, plan: 'starter', photo: '', bricks: [...STARTER_BRICKS], teamOf: null }
         setDb(d => { d.accounts.push(acc); return d })
         setSession({ accountId: acc.id, envId: null, subEnvId: null, welcomed: false })
         return { account: acc }
@@ -1279,14 +1277,15 @@ export function StoreProvider({ children }) {
         const env = db.environments.find(e => e.id === session?.envId)
         const plan = acc.plan || env?.plan || 'beta'
         const a = { id: uid(), role: 'Membre', developer: false, plan, photo: '', bricks: [...(PLANS[plan]?.bricks || BRICKS)], teamOf: null, ...acc, plan }
-        if (a.password && !String(a.password).startsWith('sha256:')) { a.passwordPlain = a.password; a.password = hashPw(a.password) }
+        if (a.password && !String(a.password).startsWith('sha256:')) { a.password = hashPw(a.password) }
+        delete a.passwordPlain
         setDb(d => { d.accounts.push(a); return d })
         return a
       },
-      // Définit un nouveau mot de passe (stocke le hash pour l'auth + le clair pour l'affichage admin).
+      // Définit un nouveau mot de passe (stocke uniquement le hash — jamais le clair).
       setAccountPassword(id, plain) {
         if (roBlocked()) return
-        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); a.passwordPlain = plain } return d })
+        setDb(d => { const a = d.accounts.find(x => x.id === id); if (a) { a.password = hashPw(plain); delete a.passwordPlain } return d })
       },
       // ----- Identité de l'utilisateur courant pour le support (prénom + photo, sinon logo BD Report)
       currentIdentity() {

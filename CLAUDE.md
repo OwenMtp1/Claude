@@ -51,8 +51,10 @@ npm run dev        # serveur de dev
   realtime, dernier-écrit-gagne, anti-écho par `_client`) et `contact_requests`.
 - Logique : `src/supabaseSync.js` + effet dans `StoreProvider`. Au 1er chargement, **le distant fait foi s'il existe**.
   Bouton de test : Paramètres → Intégrations → « Tester la connexion ».
-- ⚠️ **Sécurité** : les mots de passe sont stockés **en clair** (`account.passwordPlain`, en plus du hash) pour l'affichage
-  admin → ils partent dans le blob Supabase, lisible avec la clé anon. À durcir (vraie auth Supabase + RLS) si passage public.
+- ⚠️ **Sécurité** : les mots de passe sont stockés **uniquement hashés** (`account.password` = `sha256:…`) — plus aucun
+  `passwordPlain` (purgé du blob par `migrate`). L'admin peut **réinitialiser** un mot de passe mais ne le voit jamais.
+  RESTE À DURCIR avant prod publique : la RLS de `app_state` est `using(true)` → la clé anon (publique, livrée au client)
+  permet de lire/écrire tout le blob. Vrai correctif = Supabase Auth + RLS `authenticated` (cf. `supabase/SETUP.md`).
 
 ## DÉPLOIEMENT — IMPORTANT
 Le **proxy git de l'environnement de dev bloque la branche `gh-pages`** (seul le push de la branche de travail passe).
