@@ -332,6 +332,20 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
         if(inbox.length>200) inbox=inbox.slice(-200);
         localStorage.setItem(KEY, JSON.stringify(inbox));
       }
+      // Chiffre un champ avant envoi à Supabase (AES-GCM, même clé que l'app).
+      // Repli : en cas d'échec (pas de Web Crypto…), renvoie le clair → le formulaire ne casse jamais.
+      async function bdrEncField(str){
+        try{
+          if(!(window.crypto&&window.crypto.subtle)) return str;
+          var hex='bb1135c5bb1c9471b39e1550d055dea4ce3176876d279d1e609dd94a89613aa2';
+          var raw=new Uint8Array(hex.match(/.{2}/g).map(function(h){return parseInt(h,16);}));
+          var key=await window.crypto.subtle.importKey('raw',raw,{name:'AES-GCM'},false,['encrypt']);
+          var iv=window.crypto.getRandomValues(new Uint8Array(12));
+          var ct=await window.crypto.subtle.encrypt({name:'AES-GCM',iv:iv},key,new TextEncoder().encode(String(str)));
+          var packed=new Uint8Array(iv.length+ct.byteLength); packed.set(iv,0); packed.set(new Uint8Array(ct),iv.length);
+          return 'enc:'+btoa(String.fromCharCode.apply(null,packed));
+        }catch(_){ return str; }
+      }
       async function sendContact(e){
         e.preventDefault();
         var name=document.getElementById('cName').value.trim();
@@ -346,7 +360,9 @@ footer{background:var(--night);color:rgba(255,255,255,.55);border-top:1px solid 
             // Cross-device : le message arrive réellement chez le support, sur tout appareil.
             var mod=await import('https://esm.sh/@supabase/supabase-js@2');
             var sb=mod.createClient(window.BDR_SUPABASE_URL, window.BDR_SUPABASE_ANON_KEY);
-            var res=await sb.from('contact_requests').insert(item);
+            // Chiffre les champs sensibles au repos dans Supabase (déchiffrés par l'app).
+            var encItem={ id:item.id, name:await bdrEncField(name), email:await bdrEncField(email), message:await bdrEncField(msg), lang:curLang, created_at:item.created_at };
+            var res=await sb.from('contact_requests').insert(encItem);
             if(res.error) throw res.error;
             try{ localStoreContact(item); }catch(_){ /* cache local best-effort */ }
           } else {

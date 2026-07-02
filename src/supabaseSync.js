@@ -6,7 +6,7 @@
 //  (esm.sh) pour ne pas alourdir le bundle/déploiement mono-fichier.
 // ---------------------------------------------------------------------------
 import { SUPABASE_URL, SUPABASE_ANON_KEY, isSupabaseConfigured } from './supabaseConfig.js'
-import { encryptBlob, decryptBlob } from './blobCrypto.js'
+import { encryptBlob, decryptBlob, decryptString } from './blobCrypto.js'
 
 const STATE_ID = 'main'
 let clientPromise = null
@@ -78,13 +78,22 @@ export async function testConnection() {
 }
 
 // ----- Demandes de contact (site → app) -----------------------------------
-const mapReq = (r) => ({ id: r.id, name: r.name || '', email: r.email || '', message: r.message || '', lang: r.lang || 'fr', createdAt: r.created_at || new Date().toISOString() })
+// Les champs sensibles (nom/email/message) peuvent être chiffrés par le site
+// (préfixe "enc:") — on les déchiffre à la lecture (rétro-compatible avec le clair).
+const mapReq = async (r) => ({
+  id: r.id,
+  name: await decryptString(r.name || ''),
+  email: await decryptString(r.email || ''),
+  message: await decryptString(r.message || ''),
+  lang: r.lang || 'fr',
+  createdAt: r.created_at || new Date().toISOString(),
+})
 
 export async function fetchContactRequests() {
   const c = await getClient(); if (!c) return []
   try {
     const { data } = await c.from('contact_requests').select('*').order('created_at', { ascending: false }).limit(500)
-    return (data || []).map(mapReq)
+    return await Promise.all((data || []).map(mapReq))
   } catch (e) { return [] }
 }
 
@@ -92,7 +101,7 @@ export async function subscribeContactRequests(onInsert) {
   const c = await getClient(); if (!c) return () => {}
   const ch = c.channel('contact_rt')
     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'contact_requests' },
-      payload => { if (payload.new) onInsert(mapReq(payload.new)) })
+      async payload => { if (payload.new) onInsert(await mapReq(payload.new)) })
     .subscribe()
   return () => { try { c.removeChannel(ch) } catch (e) {} }
 }

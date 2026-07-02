@@ -48,6 +48,34 @@ export async function encryptBlob(obj) {
   return { _enc: toB64(packed.buffer) }
 }
 
+// --- Chiffrement au niveau d'une CHAÎNE (ex. champs des demandes de contact) ---
+// Format : "enc:" + base64(iv|ciphertext). Rétro-compatible : une valeur sans
+// le préfixe "enc:" est renvoyée telle quelle (ancien texte en clair).
+const ENC_PREFIX = 'enc:'
+
+export async function encryptString(str) {
+  const key = await getKey()
+  if (!key || str == null) return str
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12))
+  const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(String(str)))
+  const packed = new Uint8Array(iv.length + ct.byteLength)
+  packed.set(iv, 0); packed.set(new Uint8Array(ct), iv.length)
+  return ENC_PREFIX + toB64(packed.buffer)
+}
+
+export async function decryptString(val) {
+  if (typeof val !== 'string' || !val.startsWith(ENC_PREFIX)) return val
+  const key = await getKey()
+  if (!key) return val
+  try {
+    const packed = fromB64(val.slice(ENC_PREFIX.length))
+    const pt = await subtle.decrypt({ name: 'AES-GCM', iv: packed.slice(0, 12) }, key, packed.slice(12))
+    return new TextDecoder().decode(pt)
+  } catch (e) {
+    return val
+  }
+}
+
 // Déchiffre une valeur lue depuis Supabase. Rétro-compatible :
 // si ce n'est pas un blob chiffré (ancien état en clair), renvoie tel quel.
 export async function decryptBlob(stored) {
