@@ -582,7 +582,9 @@ function buildSeedDb() {
   subData.contacts = contactsFromRdvs(subData.rdvs)
   return {
     accounts: [{
-      id: '01', email: 'owen.mb.pro@gmail.com', pseudo: 'OwenMtp', password: 'demo1234',
+      // Compte de démo pour une instance vierge. Aucun identifiant réel en clair dans le code :
+      // sur l'app en ligne, ce compte est remplacé par les données réelles de Supabase.
+      id: '01', email: 'demo@bdreport.app', pseudo: 'OwenMtp', password: 'demo1234',
       role: 'Fondateur', developer: true, plan: 'beta', photo: '', bricks: [...BRICKS], teamOf: null,
     }],
     environments: [{ id: envId, name: 'PeopleSpheres', logo: '', pin: '', plan: 'beta', createdBy: '01', departments: ['Marketing', 'Sales', 'Tech', 'Direction'] }],

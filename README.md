@@ -13,7 +13,7 @@ Puis ouvrir http://localhost:5173
 
 ## Compte de démonstration
 
-- **Mail** : owen.mb.pro@gmail.com (ou pseudo `OwenMtp`)
+- **Mail** : demo@bdreport.app (ou pseudo `OwenMtp`)
 - **Mot de passe** : `demo1234`
 - Environnement : **PeopleSpheres** → espace **Owen Mrani Bonnier** (code `1205`)
 
